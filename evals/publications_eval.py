@@ -231,6 +231,9 @@ async def evaluate_single_test_case(test_case: PublicationTestCase) -> Dict[str,
             pmcid = result.get("pmcid")
             preprint_doi = result.get("preprint_doi")
             response_text = result.get("message", "")
+            source = result.get("source", "unknown")
+            multiple_publications = result.get("multiple_publications", False)
+            all_publications = result.get("all_publications", [])
             
             # Ensure response_text is a string
             if response_text is None:
@@ -247,6 +250,19 @@ async def evaluate_single_test_case(test_case: PublicationTestCase) -> Dict[str,
             response_text = result if result is not None else ""
             pmid, pmcid = extract_pmid_pmcid(response_text)
             preprint_doi = extract_preprint_doi(response_text)
+            source = "unknown"
+            multiple_publications = False
+            all_publications = []
+            
+            # Try to determine source from text
+            if "linked in GEO" in response_text or "linked in SRA" in response_text or "linked in ArrayExpress" in response_text or "direct link" in response_text or "elink" in response_text:
+                source = "direct_link"
+            elif "Google search" in response_text or "searched for" in response_text or "found through search" in response_text:
+                source = "google_search"
+                
+            # Check for multiple publications
+            if "multiple publications" in response_text.lower() or "several publications" in response_text.lower() or "found multiple" in response_text.lower():
+                multiple_publications = True
         
         # Normalize DOIs by removing version suffixes (e.g., v1, v2)
         if preprint_doi:
@@ -287,10 +303,14 @@ async def evaluate_single_test_case(test_case: PublicationTestCase) -> Dict[str,
             "pmcid_correct": pmcid_correct,
             "preprint_doi_correct": preprint_doi_correct,
             "response": response_text,
+            "source": source,
+            "multiple_publications": multiple_publications,
+            "all_publications": all_publications,
             "execution_time": end_time - start_time
         }
         
         logger.info(f"Results for {accessions_str}: PMID={pmid}, PMCID={pmcid}, Preprint DOI={preprint_doi}")
+        logger.info(f"Source: {source}, Multiple publications: {multiple_publications}")
         logger.info(f"Success: {pmid_correct and pmcid_correct and preprint_doi_correct}")
         
     except Exception as e:

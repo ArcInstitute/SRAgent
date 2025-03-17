@@ -92,6 +92,23 @@ def create_publications_agent(
         " - Authors may refer to different accession numbers in their paper, so trying each one increases chances of finding the publication.",
         " - In general, if a GSE / E-MTAB accession is given, try that first before trying the SRP / PRJNA accession, since I have found that these IDs usually have higher success rates.",
         " - Once you find a publication using any of the accessions, stop searching and report it as the result for all accessions.",
+        "# Multiple Publications",
+        " - IMPORTANT: If you find multiple publications directly linked to the accessions through GEO/SRA/ArrayExpress, you MUST report this in your response.",
+        " - When multiple publications are found, you need to select a primary publication for metadata curation.",
+        " - Criteria for selecting the primary publication:",
+        "   1. Choose the most comprehensive or detailed publication (usually the one with the most pages or in a higher impact journal)",
+        "   2. Choose the most recent publication if they appear to be equally comprehensive",
+        "   3. Choose the publication that most directly describes the dataset (rather than a review or secondary analysis)",
+        " - In your response, clearly indicate that multiple publications were found and which one you've selected as primary.",
+        " - List all publications with their PMIDs, PMCIDs, and titles.",
+        " - ONLY report multiple publications when they are directly linked through databases, NOT when found through Google search.",
+        "# Source Tracking",
+        " - CRITICAL: You MUST explicitly state in your response how you found the publication using one of these exact phrases:",
+        "   - 'SOURCE: DIRECT_LINK' - If found through direct links in GEO/SRA/ArrayExpress databases",
+        "   - 'SOURCE: GOOGLE_SEARCH' - If found through Google search",
+        "   - 'SOURCE: NOT_FOUND' - If no publication was found",
+        " - This source information MUST be included in your message, preferably at the beginning or end.",
+        " - This information is critical for the researcher to assess the reliability of the match.",
         "# Preprints",
         " - If a preprint best matches the publication you're looking for, report the preprint doi it as the result for all accessions.",
         "# Calling agents",
@@ -113,6 +130,7 @@ def create_publications_agent(
         " - If you find a preprint (with DOI) but no published version in PubMed yet, it's acceptable to have null values for PMID and PMCID while providing the preprint_doi.",
         " - The message should be concise and provide only the relevant information.",
         " - When reporting results for multiple accessions, clearly state that the publication applies to all accessions.",
+        " - REMEMBER to include the source information in your message using one of the exact phrases mentioned above.",
     ])
 
     # create agent
@@ -144,6 +162,79 @@ def create_publications_agent(
     
     return invoke_publications_agent
 
+def extract_pmid_pmcid(result: str) -> tuple:
+    """
+    Extract PMID and PMCID from the agent's response.
+    
+    Args:
+        result: The agent's response as a string.
+        
+    Returns:
+        A tuple of (pmid, pmcid) extracted from the response, or (None, None) if not found.
+    """
+    pmid = None
+    pmcid = None
+    
+    # Look for PMID in the response
+    pmid_patterns = [
+        r"PMID:?\s*(\d+)",
+        r"PMID\s+(\d+)",
+        r"PMID[:\s]*(\d+)",
+        r"PubMed ID:?\s*(\d+)",
+        r"PubMed\s+ID:?\s*(\d+)",
+        r"\*\*PMID:\*\*\s*(\d+)",  # For markdown formatted output
+        r"\*\*PMID\*\*:?\s*(\d+)",  # For markdown formatted output
+        r"- \*\*PMID:\*\*\s*(\d+)",  # For markdown list items
+        r"- \*\*PMID\*\*:?\s*(\d+)",  # For markdown list items
+    ]
+    
+    for pattern in pmid_patterns:
+        match = re.search(pattern, result, re.IGNORECASE)
+        if match:
+            pmid = match.group(1)
+            break
+    
+    # Look for PMCID in the response
+    pmcid_patterns = [
+        r"PMCID:?\s*(PMC\d+)",
+        r"PMCID\s+(PMC\d+)",
+        r"PMCID[:\s]*(PMC\d+)",
+        r"PMC:?\s*(\d+)",
+        r"PMC\s+ID:?\s*(PMC\d+)",
+        r"PMC\s+ID:?\s*(\d+)",
+        r"\*\*PMCID:\*\*\s*(PMC\d+)",  # For markdown formatted output
+        r"\*\*PMCID\*\*:?\s*(PMC\d+)",  # For markdown formatted output
+        r"- \*\*PMCID:\*\*\s*(PMC\d+)",  # For markdown list items
+        r"- \*\*PMCID\*\*:?\s*(PMC\d+)",  # For markdown list items
+    ]
+    
+    for pattern in pmcid_patterns:
+        match = re.search(pattern, result, re.IGNORECASE)
+        if match:
+            pmcid = match.group(1)
+            # Add PMC prefix if it's just a number
+            if not pmcid.startswith("PMC"):
+                pmcid = f"PMC{pmcid}"
+            break
+    
+    # If we still haven't found the PMID, try a more general approach
+    if pmid is None:
+        # Look for any number that appears after "PMID" in any format
+        general_pmid_pattern = r"PMID.*?(\d+)"
+        match = re.search(general_pmid_pattern, result, re.IGNORECASE)
+        if match:
+            pmid = match.group(1)
+    
+    # If we still haven't found the PMCID, try a more general approach
+    if pmcid is None:
+        # Look for PMC followed by numbers
+        general_pmcid_pattern = r"PMC.*?(\d+)"
+        match = re.search(general_pmcid_pattern, result, re.IGNORECASE)
+        if match:
+            pmcid = f"PMC{match.group(1)}"
+    
+    return pmid, pmcid
+
 async def create_publications_agent_stream(input, config: dict={}, summarize_steps: bool=False) -> Dict[str, Any]:
     """
     Create a streaming version of the publications agent.
@@ -154,7 +245,10 @@ async def create_publications_agent_stream(input, config: dict={}, summarize_ste
             "pmid": "PMID_VALUE",  # The PMID as a string, or null if not found
             "pmcid": "PMCID_VALUE",  # The PMCID as a string, or null if not found
             "title": "PUBLICATION_TITLE",  # The title of the publication, or null if not found
-            "message": "YOUR_MESSAGE"  # A brief message explaining the findings
+            "message": "YOUR_MESSAGE",  # A brief message explaining the findings
+            "source": "SOURCE_TYPE",  # How the publication was found: "direct_link", "google_search", or "not_found"
+            "multiple_publications": false,  # Whether multiple publications were found through direct links
+            "all_publications": []  # List of all publications found if multiple_publications is true
         }
     """
     # Configure logging to suppress specific messages
@@ -193,6 +287,46 @@ async def create_publications_agent_stream(input, config: dict={}, summarize_ste
     # Get the agent's response
     response_text = result["messages"][-1].content
     
+    # Initialize source tracking and multiple publications flags
+    source = "unknown"
+    multiple_publications = False
+    all_publications = []
+    
+    # Try to determine source from text
+    if "SOURCE: DIRECT_LINK" in response_text:
+        source = "direct_link"
+    elif "SOURCE: GOOGLE_SEARCH" in response_text:
+        source = "google_search"
+    elif "SOURCE: NOT_FOUND" in response_text:
+        source = "not_found"
+    # Fallback to more general indicators if explicit ones aren't found
+    elif "linked in GEO" in response_text or "linked in SRA" in response_text or "linked in ArrayExpress" in response_text or "direct link" in response_text or "elink" in response_text:
+        source = "direct_link"
+    elif "Google search" in response_text or "searched for" in response_text or "found through search" in response_text:
+        source = "google_search"
+    
+    # Check for multiple publications
+    if "multiple publications" in response_text.lower() or "several publications" in response_text.lower() or "found multiple" in response_text.lower():
+        multiple_publications = True
+        
+        # Try to extract all publications mentioned
+        # This is a simplified approach - in practice, you might need more sophisticated parsing
+        publication_sections = re.split(r'Publication \d+:|Paper \d+:', response_text)
+        if len(publication_sections) > 1:
+            for section in publication_sections[1:]:  # Skip the first section which is intro text
+                pub_pmid, pub_pmcid = extract_pmid_pmcid(section)
+                pub_title = None
+                title_match = re.search(r'titled\s+"([^"]+)"', section)
+                if title_match:
+                    pub_title = title_match.group(1)
+                
+                if pub_pmid or pub_pmcid:
+                    all_publications.append({
+                        "pmid": pub_pmid,
+                        "pmcid": pub_pmcid,
+                        "title": pub_title
+                    })
+    
     # Try to parse the response as JSON
     try:
         # Look for JSON-like content in the response
@@ -202,38 +336,33 @@ async def create_publications_agent_stream(input, config: dict={}, summarize_ste
             response_dict = json.loads(json_str)
             
             # Ensure all required keys are present
-            required_keys = ["pmid", "pmcid", "title", "message"]
+            required_keys = ["pmid", "pmcid", "preprint_doi", "message"]
             for key in required_keys:
                 if key not in response_dict:
                     response_dict[key] = None
             
-            # If PMCID is found but PMID is not, try to get PMID from PMCID
+            # Add source tracking and multiple publications information
+            response_dict["source"] = source
+            response_dict["multiple_publications"] = multiple_publications
+            response_dict["all_publications"] = all_publications
+            
+            # If PMCID is found but PMID is not, directly convert PMCID to PMID
             if response_dict["pmcid"] and not response_dict["pmid"]:
                 try:
                     logging.info(f"Attempting to get PMID from PMCID: {response_dict['pmcid']}")
-                    from Bio import Entrez
-                    Entrez.email = os.getenv("EMAIL", "user@example.com")
-                    Entrez.api_key = os.getenv("NCBI_API_KEY")
+                    
+                    # Use the existing pmid_from_pmcid function
+                    from SRAgent.tools.pmid import pmid_from_pmcid
                     
                     pmcid = response_dict["pmcid"]
-                    # Ensure the PMCID has the 'PMC' prefix
-                    if not pmcid.startswith('PMC'):
-                        pmcid = f'PMC{pmcid}'
+                    pmid = pmid_from_pmcid(pmcid)
                     
-                    logging.info(f"Using Entrez to convert PMCID {pmcid} to PMID")
-                    # Use the Entrez elink utility to convert PMC ID to PMID
-                    handle = Entrez.elink(dbfrom="pmc", db="pubmed", linkname="pmc_pubmed", id=pmcid.replace('PMC', ''))
-                    record = Entrez.read(handle)
-                    handle.close()
-                    
-                    logging.info(f"Entrez response: {record}")
-                    
-                    # Extract the PMID from the response
-                    if record and record[0]['LinkSetDb'] and record[0]['LinkSetDb'][0]['Link']:
-                        pmid = record[0]['LinkSetDb'][0]['Link'][0]['Id']
+                    if pmid:
                         logging.info(f"Found PMID: {pmid} for PMCID: {pmcid}")
                         response_dict["pmid"] = pmid
                         response_dict["message"] += f" PMID: {pmid} was automatically retrieved from PMCID: {pmcid}."
+                    else:
+                        logging.warning(f"No PMID found for PMCID: {pmcid}")
                 except Exception as e:
                     logging.warning(f"Failed to get PMID from PMCID: {e}")
                     logging.exception("Exception details:")
@@ -243,94 +372,8 @@ async def create_publications_agent_stream(input, config: dict={}, summarize_ste
         # If JSON parsing fails, extract PMID and PMCID using regex
         logging.warning(f"Failed to parse response as JSON: {e}")
         
-        # Extract PMID
-        pmid = None
-        pmid_patterns = [
-            r"PMID:?\s*(\d+)",
-            r"PMID\s+(\d+)",
-            r"PMID[:\s]*(\d+)",
-            r"PubMed ID:?\s*(\d+)",
-            r"PubMed\s+ID:?\s*(\d+)",
-            r"\*\*PMID:\*\*\s*(\d+)",
-            r"\*\*PMID\*\*:?\s*(\d+)",
-            r"- \*\*PMID:\*\*\s*(\d+)",
-            r"- \*\*PMID\*\*:?\s*(\d+)",
-        ]
-        
-        for pattern in pmid_patterns:
-            match = re.search(pattern, response_text, re.IGNORECASE)
-            if match:
-                pmid = match.group(1)
-                break
-        
-        # If we still haven't found the PMID, try a more general approach
-        if pmid is None:
-            general_pmid_pattern = r"PMID.*?(\d+)"
-            match = re.search(general_pmid_pattern, response_text, re.IGNORECASE)
-            if match:
-                pmid = match.group(1)
-        
-        # Extract PMCID
-        pmcid = None
-        pmcid_patterns = [
-            r"PMCID:?\s*(PMC\d+)",
-            r"PMCID\s+(PMC\d+)",
-            r"PMCID[:\s]*(PMC\d+)",
-            r"PMC:?\s*(\d+)",
-            r"PMC\s+ID:?\s*(PMC\d+)",
-            r"PMC\s+ID:?\s*(\d+)",
-            r"\*\*PMCID:\*\*\s*(PMC\d+)",
-            r"\*\*PMCID\*\*:?\s*(PMC\d+)",
-            r"- \*\*PMCID:\*\*\s*(PMC\d+)",
-            r"- \*\*PMCID\*\*:?\s*(PMC\d+)",
-        ]
-        
-        for pattern in pmcid_patterns:
-            match = re.search(pattern, response_text, re.IGNORECASE)
-            if match:
-                pmcid = match.group(1)
-                # Add PMC prefix if it's just a number
-                if not pmcid.startswith("PMC"):
-                    pmcid = f"PMC{pmcid}"
-                break
-        
-        # If we still haven't found the PMCID, try a more general approach
-        if pmcid is None:
-            general_pmcid_pattern = r"PMC.*?(\d+)"
-            match = re.search(general_pmcid_pattern, response_text, re.IGNORECASE)
-            if match:
-                pmcid = f"PMC{match.group(1)}"
-        
-        # If PMCID is found but PMID is not, try to get PMID from PMCID
-        if pmcid and not pmid:
-            try:
-                logging.info(f"Attempting to get PMID from PMCID: {pmcid}")
-                from Bio import Entrez
-                Entrez.email = os.getenv("EMAIL", "user@example.com")
-                Entrez.api_key = os.getenv("NCBI_API_KEY")
-                
-                # Ensure the PMCID has the 'PMC' prefix
-                if not pmcid.startswith('PMC'):
-                    pmcid = f'PMC{pmcid}'
-                
-                logging.info(f"Using Entrez to convert PMCID {pmcid} to PMID")
-                # Use the Entrez elink utility to convert PMC ID to PMID
-                handle = Entrez.elink(dbfrom="pmc", db="pubmed", linkname="pmc_pubmed", id=pmcid.replace('PMC', ''))
-                record = Entrez.read(handle)
-                handle.close()
-                
-                logging.info(f"Entrez response: {record}")
-                
-                # Extract the PMID from the response
-                if record and record[0]['LinkSetDb'] and record[0]['LinkSetDb'][0]['Link']:
-                    pmid = record[0]['LinkSetDb'][0]['Link'][0]['Id']
-                    logging.info(f"Found PMID: {pmid} for PMCID: {pmcid}")
-                    response_text += f" PMID: {pmid} was automatically retrieved from PMCID: {pmcid}."
-                else:
-                    logging.warning(f"No PMID found for PMCID: {pmcid} in Entrez response")
-            except Exception as e:
-                logging.warning(f"Failed to get PMID from PMCID: {e}")
-                logging.exception("Exception details:")
+        # Extract PMID and PMCID using our helper function
+        pmid, pmcid = extract_pmid_pmcid(response_text)
         
         # Extract title (if available)
         title = None
@@ -338,13 +381,82 @@ async def create_publications_agent_stream(input, config: dict={}, summarize_ste
         if title_match:
             title = title_match.group(1)
         
+        # Extract preprint DOI
+        preprint_doi = None
+        doi_match = re.search(r'DOI:?\s*(10\.\d+/[^\s\"\']+)', response_text, re.IGNORECASE)
+        if doi_match:
+            preprint_doi = doi_match.group(1)
+            
+        # Determine source from text
+        source = "unknown"
+        # Check for explicit source indicators
+        if "SOURCE: DIRECT_LINK" in response_text:
+            source = "direct_link"
+        elif "SOURCE: GOOGLE_SEARCH" in response_text:
+            source = "google_search"
+        elif "SOURCE: NOT_FOUND" in response_text:
+            source = "not_found"
+        # Fallback to more general indicators if explicit ones aren't found
+        elif "linked in GEO" in response_text or "linked in SRA" in response_text or "linked in ArrayExpress" in response_text or "direct link" in response_text or "elink" in response_text:
+            source = "direct_link"
+        elif "Google search" in response_text or "searched for" in response_text or "found through search" in response_text:
+            source = "google_search"
+            
+        # Check for multiple publications
+        multiple_publications = False
+        all_publications = []
+        if "multiple publications" in response_text.lower() or "several publications" in response_text.lower() or "found multiple" in response_text.lower():
+            multiple_publications = True
+            
+            # Try to extract all publications mentioned
+            publication_sections = re.split(r'Publication \d+:|Paper \d+:', response_text)
+            if len(publication_sections) > 1:
+                for section in publication_sections[1:]:  # Skip the first section which is intro text
+                    pub_pmid, pub_pmcid = extract_pmid_pmcid(section)
+                    pub_title = None
+                    title_match = re.search(r'titled\s+"([^"]+)"', section)
+                    if title_match:
+                        pub_title = title_match.group(1)
+                    
+                    if pub_pmid or pub_pmcid:
+                        all_publications.append({
+                            "pmid": pub_pmid,
+                            "pmcid": pub_pmcid,
+                            "title": pub_title
+                        })
+        
+        # If PMCID is found but PMID is not, directly convert PMCID to PMID
+        if pmcid and not pmid:
+            try:
+                logging.info(f"Attempting to get PMID from PMCID: {pmcid}")
+                
+                # Use the existing pmid_from_pmcid function
+                from SRAgent.tools.pmid import pmid_from_pmcid
+                
+                pmid = pmid_from_pmcid(pmcid)
+                
+                if pmid:
+                    logging.info(f"Found PMID: {pmid} for PMCID: {pmcid}")
+                    response_text += f" PMID: {pmid} was automatically retrieved from PMCID: {pmcid}."
+                else:
+                    logging.warning(f"No PMID found for PMCID: {pmcid}")
+            except Exception as e:
+                logging.warning(f"Failed to get PMID from PMCID: {e}")
+                logging.exception("Exception details:")
+        
         # Return structured dictionary
-        return {
+        result_dict = {
             "pmid": pmid,
             "pmcid": pmcid,
             "title": title,
-            "message": response_text
+            "preprint_doi": preprint_doi,
+            "message": response_text,
+            "source": source,
+            "multiple_publications": multiple_publications,
+            "all_publications": all_publications
         }
+        
+        return result_dict
 
 # main
 if __name__ == '__main__':

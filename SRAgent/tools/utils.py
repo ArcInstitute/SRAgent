@@ -5,12 +5,13 @@ import json
 import random
 import decimal
 from subprocess import Popen, PIPE
-from typing import Annotated, List, Dict, Tuple, Any
+from typing import Annotated, List, Dict, Tuple, Any, Optional
 import xml.etree.ElementTree as ET
 from xml.parsers.expat import ExpatError
 from Bio import Entrez
 ## 3rd party
 import xmltodict
+import re
 
 # functions
 def batch_ids(ids: List[str], batch_size: int) -> List[List[str]]:
@@ -126,6 +127,39 @@ def set_entrez_access() -> None:
     n = random.randint(1, i)
     Entrez.email = os.getenv(f"EMAIL{n}", os.getenv("EMAIL"))
     Entrez.api = os.getenv(f"NCBI_API_KEY{n}", os.getenv("NCBI_API_KEY"))
+
+def determine_database(accession: str) -> Optional[str]:
+    """
+    Determine the appropriate Entrez database based on the accession format.
+    """
+    # SRA accessions
+    if re.match(r"^SRR\d+$", accession) or re.match(r"^ERR\d+$", accession) or re.match(r"^DRR\d+$", accession):
+        return "sra"
+    elif re.match(r"^SRX\d+$", accession) or re.match(r"^ERX\d+$", accession) or re.match(r"^DRX\d+$", accession):
+        return "sra"
+    elif re.match(r"^SRP\d+$", accession) or re.match(r"^ERP\d+$", accession) or re.match(r"^DRP\d+$", accession):
+        return "sra"
+    elif re.match(r"^PRJNA\d+$", accession) or re.match(r"^PRJEB\d+$", accession) or re.match(r"^PRJDB\d+$", accession):
+        return "bioproject"
+    
+    # GEO accessions
+    elif re.match(r"^GSE\d+$", accession):
+        return "gds"
+    elif re.match(r"^GSM\d+$", accession):
+        return "gds"
+    elif re.match(r"^GPL\d+$", accession):
+        return "gds"
+    
+    # If no match, try to guess based on prefix
+    elif accession.startswith("SRA"):
+        return "sra"
+    elif accession.startswith("GEO"):
+        return "gds"
+    elif accession.startswith("PRJ"):
+        return "bioproject"
+    
+    # Default to sra if we can't determine
+    return "sra"
 
 # main
 if __name__ == '__main__':

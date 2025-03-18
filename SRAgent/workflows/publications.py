@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Script to process a DataFrame of accessions and find publications for each study.
+Functions to process a DataFrame of accessions and find publications for each study.
 """
 
 import os
@@ -8,13 +8,14 @@ import sys
 import asyncio
 import pandas as pd
 import logging
-from tqdm import tqdm
-from Bio import Entrez
-from typing import List, Dict, Any, Optional
+from dotenv import load_dotenv
+import nest_asyncio
+from typing import Dict, Any
 
-# Add the parent directory to the path so we can import from SRAgent
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from SRAgent.agents.publications import create_publications_agent_stream, configure_logging
+
+# Apply nest_asyncio to allow nested event loops (needed for Jupyter)
+nest_asyncio.apply()
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -22,6 +23,9 @@ logger = logging.getLogger(__name__)
 
 # Configure logging to suppress specific messages
 configure_logging()
+
+# Load environment variables from .env file
+load_dotenv()
 
 async def find_publication_for_study(row: pd.Series) -> Dict[str, Any]:
     """
@@ -63,6 +67,19 @@ async def find_publication_for_study(row: pd.Series) -> Dict[str, Any]:
         # Run the agent
         result = await create_publications_agent_stream(input_message)
         
+        # Create a default result dictionary if None was returned
+        if result is None:
+            result = {
+                "pmid": None,
+                "pmcid": None,
+                "preprint_doi": None,
+                "title": None,
+                "message": f"No valid result returned for accessions: {accessions_str}",
+                "source": "error",
+                "multiple_publications": False,
+                "all_publications": []
+            }
+        
         # Add original accessions to the result
         result["accessions"] = accessions
         
@@ -93,7 +110,8 @@ async def process_dataframe(df: pd.DataFrame, output_file: str, batch_size: int 
     Returns:
         A pandas DataFrame with the publication information for each study.
     """
-    # Set email and API key for Entrez
+    # Set email and API key for Entrez from environment variables
+    from Bio import Entrez
     Entrez.email = os.getenv("EMAIL")
     Entrez.api_key = os.getenv("NCBI_API_KEY")
     
@@ -101,7 +119,8 @@ async def process_dataframe(df: pd.DataFrame, output_file: str, batch_size: int 
     results = []
     
     # Process the DataFrame in batches
-    for i in tqdm(range(0, len(df), batch_size), desc="Processing batches"):
+    total_batches = (len(df) + batch_size - 1) // batch_size
+    for i in range(0, len(df), batch_size):
         batch = df.iloc[i:i+batch_size]
         
         # Create tasks for each row in the batch
@@ -118,7 +137,8 @@ async def process_dataframe(df: pd.DataFrame, output_file: str, batch_size: int 
         results_df.to_csv(output_file, index=False)
         
         # Log progress
-        logger.info(f"Processed {min(i+batch_size, len(df))}/{len(df)} studies")
+        current_batch = i // batch_size + 1
+        logger.info(f"Processed batch {current_batch}/{total_batches} ({min(i+batch_size, len(df))}/{len(df)} studies)")
     
     # Create final DataFrame
     results_df = pd.DataFrame(results)
@@ -128,24 +148,40 @@ async def process_dataframe(df: pd.DataFrame, output_file: str, batch_size: int 
     
     return results_df
 
-def main():
-    """Main function to run the script."""
-    import argparse
+def run_in_notebook(df, output_file, batch_size=10, email=None, api_key=None, env_file=None):
+    """
+    Run the publication processing in a Jupyter notebook.
     
-    parser = argparse.ArgumentParser(description="Process a DataFrame of accessions and find publications for each study.")
-    parser.add_argument("input_file", help="Path to the input CSV file containing the accessions.")
-    parser.add_argument("output_file", help="Path to save the results.")
-    parser.add_argument("--batch-size", type=int, default=10, help="Number of studies to process in parallel.")
+    Args:
+        df: A pandas DataFrame containing the accessions for each study.
+        output_file: Path to save the results.
+        batch_size: Number of studies to process in parallel.
+        email: Email for Entrez (optional if set as environment variable).
+        api_key: NCBI API key (optional if set as environment variable).
+        env_file: Path to .env file (optional).
+        
+    Returns:
+        A pandas DataFrame with the publication information for each study.
+    """
+    # Load environment variables from specified .env file if provided
+    if env_file:
+        load_dotenv(env_file)
     
-    args = parser.parse_args()
+    # Set environment variables if provided
+    if email:
+        os.environ["EMAIL"] = email
+    if api_key:
+        os.environ["NCBI_API_KEY"] = api_key
     
-    # Read the input DataFrame
-    df = pd.read_csv(args.input_file)
+    # Use asyncio.run which handles the event loop properly
+    try:
+        # For Jupyter notebooks, we can use the current event loop
+        # since nest_asyncio is applied
+        results_df = asyncio.run(process_dataframe(df, output_file, batch_size))
+    except RuntimeError:
+        # If there's an issue with the event loop, try this alternative approach
+        loop = asyncio.get_event_loop()
+        results_df = loop.run_until_complete(process_dataframe(df, output_file, batch_size))
     
-    # Process the DataFrame
-    asyncio.run(process_dataframe(df, args.output_file, args.batch_size))
-    
-    logger.info(f"Results saved to {args.output_file}")
-
-if __name__ == "__main__":
-    main() 
+    print(f"Results saved to {output_file}")
+    return results_df 

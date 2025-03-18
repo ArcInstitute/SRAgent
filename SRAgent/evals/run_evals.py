@@ -18,6 +18,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 # Import evaluation functions
 from SRAgent.evals.publications_eval import evaluate_publications_agent, TEST_CASES
+from SRAgent.agents.publications import configure_logging
 
 # Set up logging
 logging.basicConfig(
@@ -25,6 +26,9 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Configure logging to suppress specific messages
+configure_logging()
 
 async def run_evaluations(args):
     """
@@ -63,6 +67,9 @@ def main():
     # Load environment variables
     load_dotenv()
     
+    # Configure logging
+    configure_logging()
+    
     # Set email and API key for Entrez
     Entrez.email = os.getenv("EMAIL")
     Entrez.api_key = os.getenv("NCBI_API_KEY")
@@ -79,6 +86,9 @@ def main():
     # Set logging level
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
+    else:
+        # Make sure to configure logging even if not verbose
+        configure_logging()
     
     # If --all is specified, run all evaluations
     if args.all:

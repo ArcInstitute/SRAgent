@@ -21,8 +21,9 @@ from SRAgent.agents.efetch import create_efetch_agent
 from SRAgent.agents.elink import create_elink_agent
 from SRAgent.agents.utils import create_step_summary_chain
 from SRAgent.tools.google_search import google_search_tool
-from SRAgent.tools.pmid import pmcid_from_pmid, pmid_from_pmcid, get_publication_details
+from SRAgent.tools.pmid import pmcid_from_pmid, pmid_from_pmcid, get_publication_details, pmid_from_title_tool
 from SRAgent.tools.study_info import get_study_title_from_accession
+from SRAgent.tools.geo import get_pmid_from_geo
 
 # Configure logging to suppress specific messages
 def configure_logging():
@@ -61,6 +62,8 @@ def create_publications_agent(
         pmid_from_pmcid,
         get_publication_details,
         get_study_title_from_accession,
+        pmid_from_title_tool,
+        get_pmid_from_geo,
     ]
   
     # state modifier
@@ -70,15 +73,20 @@ def create_publications_agent(
         " - You have a team of agents who can perform specific tasks using Entrez tools and Google search.",
         " - Your goal is to find the PMID and PMCID, OR (if not yet published on PubMed) the preprint DOI of publications associated with the given study accessions.",
         "# Strategies",
-        " 1) try to find publications directly linked in GEO/ArrayExpress or SRA databases using elink.",
-        " 2) If that doesn't work, try searching for the accession numbers on Google with quotes around them.",
+        " 1) For GSE accessions, ALWAYS try to extract the PMID directly from the GEO page first using get_pmid_from_geo. This is the most reliable method for GSE accessions.",
+        " 2) If direct GEO PMID retrieval doesn't work, try to find publications directly linked in GEO/ArrayExpress or SRA databases using elink.",
+        " 3) If that doesn't work, try searching for the accession numbers on Google with quotes around them.",
         "     - Here, typically GSE IDs or E-MTAB IDs have higher success rates than SRP or PRJNA IDs, so try those first.",
-        " 3) If directly Googling the accession numbers doesn't yield the publication you're looking for, then search for the study title on Google."
+        " 4) If directly Googling the accession numbers doesn't yield the publication you're looking for, then search for the study title on Google."
         "     - BE VERY CAREFUL -Using title search has a high chance of yielding publications totally unrelated to the SRA study.",
         "     - Use get_study_title_from_accession to get the study title.",
         "     - If searching using the title, you MUST verify that the authors and/or institution in the paper match those of the SRA study.",
-        " 5) Once you find a PMID, you can use the pmcid_from_pmid tool or pmid_from_pmcid tool to get the corresponding PMCID if available.",
-        " 6) Similarly, if you find a PMCID only, use the  tool to get the corresponding PMID.",
+        " 5) IMPORTANT: If you find a publication title through any method (Google search, database, etc.) but do not have a PMID or PMCID, you MUST use the pmid_from_title_tool to search for the publication in PubMed.",
+        "     - NEVER tell the user to check a journal website or database themselves.",
+        "     - ALWAYS try to find the PMID yourself using the title.",
+        "     - This is critical for providing complete information to the user.",
+        " 6) Once you find a PMID, you can use the pmcid_from_pmid tool or pmid_from_pmcid tool to get the corresponding PMCID if available.",
+        " 7) Similarly, if you find a PMCID only, use the  tool to get the corresponding PMID.",
         "# Multiple Accessions",
         " - When given multiple accession numbers, ALWAYS assume they are linked to the same publication and don't attempt to verify if they are related.",
         " - Use multiple accessions as different 'shots on goal' - try each one to find the publication.",
@@ -104,6 +112,9 @@ def create_publications_agent(
         " - }",
         " - Always include all keys in the dictionary, even if some values are null.",
         " - If you find a preprint (with DOI) but no published version in PubMed yet, it's acceptable to have null values for PMID and PMCID while providing the preprint_doi.",
+        " - If you find a publication title but no PMID or PMCID, you MUST use the pmid_from_title_tool to search for the publication in PubMed before responding.",
+        " - NEVER return a response with null PMID/PMCID values when you have found a publication title, unless you've conclusively proven it doesn't exist in PubMed.",
+        " - It is NOT acceptable to tell the user to check a journal website or database. You must provide complete information.",
         " - The message should be concise and provide only the relevant information.",
         " - When reporting results for multiple accessions, clearly state that the publication applies to all accessions.",
     ])
@@ -159,51 +170,75 @@ async def create_publications_agent_stream(input, config: dict={}, summarize_ste
     # create step summary chain
     step_summary_chain = create_step_summary_chain() if summarize_steps else None
     
-    # invoke agent
-    if summarize_steps and step_summary_chain:
-        # If we want step summaries, we need to handle it differently
-        # depending on the agent implementation
-        try:
-            # Try with step_callback parameter
-            result = await agent.ainvoke(
-                input,
-                config=config,
-                step_callback=step_summary_chain
-            )
-        except TypeError:
-            # If step_callback is not supported, try without it
+    try:
+        # invoke agent
+        if summarize_steps and step_summary_chain:
+            # If we want step summaries, we need to handle it differently
+            # depending on the agent implementation
+            try:
+                # Try with step_callback parameter
+                result = await agent.ainvoke(
+                    input,
+                    config=config,
+                    step_callback=step_summary_chain
+                )
+            except TypeError:
+                # If step_callback is not supported, try without it
+                result = await agent.ainvoke(
+                    input,
+                    config=config
+                )
+        else:
+            # If we don't need step summaries, just invoke normally
             result = await agent.ainvoke(
                 input,
                 config=config
             )
-    else:
-        # If we don't need step summaries, just invoke normally
-        result = await agent.ainvoke(
-            input,
-            config=config
-        )
+        
+        # Get the agent's response
+        response_text = result["messages"][-1].content
+        
+        # Initialize source tracking and multiple publications flags
+        source = "unknown"
+        multiple_publications = False
+        all_publications = []
+        
+        # Try to determine source from text
+        if "SOURCE: DIRECT_LINK" in response_text:
+            source = "direct_link"
+        elif "SOURCE: GOOGLE_SEARCH" in response_text:
+            source = "google_search"
+        elif "SOURCE: NOT_FOUND" in response_text:
+            source = "not_found"
+        # Fallback to more general indicators if explicit ones aren't found
+        elif "linked in GEO" in response_text or "linked in SRA" in response_text or "linked in ArrayExpress" in response_text or "direct link" in response_text or "elink" in response_text:
+            source = "direct_link"
+        elif "Google search" in response_text or "searched for" in response_text or "found through search" in response_text:
+            source = "google_search"
     
-    # Get the agent's response
-    response_text = result["messages"][-1].content
-    
-    # Try to parse the response as JSON
-    try:
-        # Look for JSON-like content in the response
-        json_match = re.search(r'({[\s\S]*})', response_text)
-        if json_match:
-            json_str = json_match.group(1)
-            response_dict = json.loads(json_str)
-            
-            # Ensure all required keys are present
-            required_keys = ["pmid", "pmcid", "title", "message"]
-            for key in required_keys:
-                if key not in response_dict:
-                    response_dict[key] = None
-            
-            return response_dict
-    except Exception as e:
-        # If JSON parsing fails, extract PMID and PMCID using regex
-        logging.warning(f"Failed to parse response as JSON: {e}")
+        # Try to parse the response as JSON
+        try:
+            # Look for JSON-like content in the response
+            json_match = re.search(r'({[\s\S]*})', response_text)
+            if json_match:
+                json_str = json_match.group(1)
+                response_dict = json.loads(json_str)
+                
+                # Ensure all required keys are present
+                required_keys = ["pmid", "pmcid", "preprint_doi", "title", "message"]
+                for key in required_keys:
+                    if key not in response_dict:
+                        response_dict[key] = None
+                
+                # Add source tracking and multiple publications information
+                response_dict["source"] = source
+                response_dict["multiple_publications"] = multiple_publications
+                response_dict["all_publications"] = all_publications
+                
+                return response_dict
+        except Exception as e:
+            # If JSON parsing fails, extract PMID and PMCID using regex
+            logging.warning(f"Failed to parse response as JSON: {e}")
         
         # Extract PMID
         pmid = None
@@ -269,12 +304,35 @@ async def create_publications_agent_stream(input, config: dict={}, summarize_ste
         if title_match:
             title = title_match.group(1)
         
+        # Extract preprint DOI
+        preprint_doi = None
+        doi_match = re.search(r'DOI:?\s*(10\.\d+/[^\s\"\']+)', response_text, re.IGNORECASE)
+        if doi_match:
+            preprint_doi = doi_match.group(1)
+        
         # Return structured dictionary
         return {
             "pmid": pmid,
             "pmcid": pmcid,
+            "preprint_doi": preprint_doi,
             "title": title,
-            "message": response_text
+            "message": response_text,
+            "source": source,
+            "multiple_publications": multiple_publications,
+            "all_publications": all_publications
+        }
+    except Exception as e:
+        logging.error(f"Error in create_publications_agent_stream: {e}")
+        # Return a default dictionary in case of errors
+        return {
+            "pmid": None,
+            "pmcid": None,
+            "preprint_doi": None, 
+            "title": None,
+            "message": f"Error processing publication data: {str(e)}",
+            "source": "error",
+            "multiple_publications": False,
+            "all_publications": []
         }
 
 # main

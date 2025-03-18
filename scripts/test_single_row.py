@@ -12,7 +12,7 @@ from Bio import Entrez
 # Add the parent directory to the path so we can import from SRAgent
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from SRAgent.agents.publications import create_publications_agent_stream, configure_logging
-from scripts.process_publications_df import find_publication_for_study
+from SRAgent.workflows.process_publications_df import find_publication_for_study
 
 async def main():
     """Main function to run the test."""

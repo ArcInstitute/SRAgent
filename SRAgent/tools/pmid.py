@@ -9,6 +9,7 @@ from Bio import Entrez
 from langchain_core.tools import tool
 ## package
 from SRAgent.tools.utils import set_entrez_access
+import re
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -187,4 +188,67 @@ def get_publication_details(
     
     except Exception as e:
         logger.error(f"Error retrieving publication details for PMID {pmid}: {e}")
-        return {"error": f"Error retrieving publication details: {str(e)}"} 
+        return {"error": f"Error retrieving publication details: {str(e)}"}
+
+def pmid_from_title(title: str) -> Optional[str]:
+    """
+    Search PubMed for a publication by title and return the PMID.
+    
+    Args:
+        title: The title of the publication.
+        
+    Returns:
+        The PMID as a string, or None if not found.
+    """
+    if not title:
+        return None
+    
+    try:
+        # Clean up the title for search
+        # Remove special characters that might interfere with the search
+        cleaned_title = re.sub(r'[^\w\s]', ' ', title)
+        # Remove extra whitespace
+        cleaned_title = ' '.join(cleaned_title.split())
+        
+        # Search PubMed for the title
+        handle = Entrez.esearch(db="pubmed", term=f'"{cleaned_title}"[Title]', retmax=5)
+        record = Entrez.read(handle)
+        handle.close()
+        
+        # Check if any results were found
+        if record["Count"] == "0":
+            # Try a more flexible search
+            handle = Entrez.esearch(db="pubmed", term=f'{cleaned_title}[Title]', retmax=5)
+            record = Entrez.read(handle)
+            handle.close()
+        
+        # If we have results, get the PMID
+        if int(record["Count"]) > 0:
+            pmid = record["IdList"][0]
+            return pmid
+        else:
+            return None
+    except Exception as e:
+        logging.error(f"Error searching PubMed by title: {e}")
+        return None
+
+@tool
+def pmid_from_title_tool(title: str) -> str:
+    """
+    Search PubMed for a publication by title and return the PMID.
+    This is useful when you find a paper title through Google or another source but need to get the PMID.
+    
+    Args:
+        title: The title of the publication.
+        
+    Returns:
+        The PMID as a string if found, otherwise a message indicating the PMID was not found.
+    """
+    # Ensure we have Entrez credentials
+    set_entrez_access()
+    
+    pmid = pmid_from_title(title)
+    if pmid:
+        return f"Found PMID: {pmid} for title: {title}"
+    else:
+        return f"No PMID found for title: {title}" 

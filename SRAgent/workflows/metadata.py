@@ -20,6 +20,7 @@ from SRAgent.db.upsert import db_upsert
 from SRAgent.agents.sragent import create_sragent_agent
 from SRAgent.workflows.tissue_ontology import create_tissue_ontology_workflow
 from SRAgent.organisms import OrganismEnum
+from SRAgent.tools.utils import structured_output_with_retry
 
 # classes
 class YesNo(Enum):
@@ -243,7 +244,8 @@ def create_get_metadata_node() -> Callable:
         for attempt in range(max_retries):
             try:
                 # call the model
-                response = await model.with_structured_output(AllMetadataEnum, strict=True).ainvoke(prompt)
+                #response = await model.with_structured_output(AllMetadataEnum, strict=True).ainvoke(prompt)
+                response = await structured_output_with_retry(model, AllMetadataEnum, prompt, max_retries=3)
                 extracted_fields = get_extracted_fields(response)
                 break
             except Exception as e:

@@ -23,6 +23,7 @@ from SRAgent.workflows.srx_info import create_SRX_info_graph
 from SRAgent.db.connect import db_connect
 from SRAgent.db.upsert import db_upsert
 from SRAgent.db.get import db_get_entrez_ids
+from SRAgent.tools.utils import structured_output_with_retry
 
 # state
 class GraphState(TypedDict):
@@ -86,7 +87,7 @@ def create_get_entrez_ids_node() -> Callable:
         database = ""
         for i in range(max_retries):
             try:
-                response = await model.with_structured_output(EntrezInfo, strict=True).ainvoke(prompt)
+                response = await structured_output_with_retry(model, EntrezInfo, prompt, max_retries=4)
                 entrez_ids = response.entrez_ids
                 database = str(response.database).lower()
                 if database in ["sra", "gds"]:

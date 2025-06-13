@@ -52,7 +52,7 @@ def tissue_ontology_main(args):
     )
     
     # Display final results with rich formatting
-    display_final_results(results, "🧬 Uberon Tissue Classifications 🧬")
+    display_final_results(results, "Uberon Tissue Classifications 🧠 🫁 🫀")
 
 # main
 if __name__ == '__main__':

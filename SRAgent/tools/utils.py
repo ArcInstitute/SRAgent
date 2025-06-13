@@ -3,12 +3,15 @@
 import os
 import json
 import random
+import logging
 import decimal
 from subprocess import Popen, PIPE
 from typing import List, Tuple, Optional
 import xml.etree.ElementTree as ET
 from xml.parsers.expat import ExpatError
+import asyncio
 from Bio import Entrez
+from pydantic import BaseModel
 ## 3rd party
 import xmltodict
 
@@ -195,6 +198,45 @@ def truncate_data(data, max_items: Optional[int]=None) -> dict:
     
     limited_data, _ = process(data)
     return limited_data
+
+async def structured_output_with_retry(model, schema: BaseModel, prompt: str | list, max_retries: int=3):
+    """
+    Call structured output with retries, adding clearer instructions each time.
+    Particularly useful for models like DeepSeek that may use LaTeX formatting.
+    Args:
+        model: The LLM to use for structured output
+        schema: The schema to use for structured output
+        prompt: The prompt to use for structured output (string or list)
+        max_retries: The maximum number of retries
+    Returns:
+        The structured output
+    """
+    retry_suffixes = [
+        "",  # First attempt with original prompt
+        "\n\nIMPORTANT: Return your response as valid JSON only. Do NOT use LaTeX notation like \\boxed{} or any mathematical formatting.",
+        "\n\nCRITICAL: You MUST respond in JSON format exactly as specified. Do NOT use \\boxed{}, \\n, or any other formatting. Only return the raw JSON data structure.",
+        "\n\nFINAL ATTEMPT: Return ONLY a JSON object. No LaTeX, no \\boxed{}, no explanations. Example format: {\"field\": \"value\"}"
+    ]
+    
+    last_error = None
+    for i in range(min(max_retries, len(retry_suffixes))):
+        try:
+            # Handle both string and list inputs
+            if isinstance(prompt, list):
+                enhanced_prompt = prompt + [retry_suffixes[i]]
+            else:
+                enhanced_prompt = prompt + retry_suffixes[i]
+            response = await model.with_structured_output(schema, strict=True).ainvoke(enhanced_prompt)
+            return response
+        except Exception as e:
+            last_error = e
+            if i < max_retries - 1:
+                logging.warning(f"Structured output attempt {i + 1} failed: {str(e)[:100]}... Retrying with clearer instructions.")
+                await asyncio.sleep(0.33)  # Small delay between retries
+            continue
+    
+    # If all retries failed, raise the last error
+    raise last_error
 
 # main
 if __name__ == '__main__':

@@ -15,7 +15,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from SRAgent.agents.utils import set_model
 from SRAgent.agents.sragent import create_sragent_agent
 from SRAgent.workflows.utils import entrez_id_to_srx
-
+from SRAgent.tools.utils import structured_output_with_retry
 
 # state
 class GraphState(TypedDict):
@@ -89,7 +89,8 @@ def create_get_accessions_node() -> Callable:
         for attempt in range(max_retries):
             try:
                 ## invoke model with structured output
-                response = await model.with_structured_output(Acessions, strict=True).ainvoke(prompt)
+                #response = await model.with_structured_output(Acessions, strict=True).ainvoke(prompt)
+                response = await structured_output_with_retry(model, Acessions, prompt, max_retries=3)
                 return {"SRX" : response.srx}
             except Exception as e:
                 if "OpenAIRefusalError" in str(type(e).__name__) and attempt < max_retries - 1:
@@ -151,7 +152,8 @@ def create_router_node() -> Callable:
         ])
         formatted_prompt = prompt.format_messages(history=state["messages"][-4:])
         # call the model
-        response = await model.with_structured_output(Choice, strict=True).ainvoke(formatted_prompt)
+        #response = await model.with_structured_output(Choice, strict=True).ainvoke(formatted_prompt)
+        response = await structured_output_with_retry(model, Choice, formatted_prompt, max_retries=3)
         # format the response
         return {
             "route": response.Choice.value,  

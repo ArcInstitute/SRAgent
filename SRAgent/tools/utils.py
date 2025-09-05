@@ -1,7 +1,6 @@
 # import
 ## batteries
 import os
-import sys
 import json
 import random
 import decimal
@@ -10,8 +9,10 @@ from typing import List, Tuple, Optional
 import xml.etree.ElementTree as ET
 from xml.parsers.expat import ExpatError
 from Bio import Entrez
+
 ## 3rd party
 import xmltodict
+
 
 # functions
 def batch_ids(ids: List[str], batch_size: int) -> List[List[str]]:
@@ -24,7 +25,8 @@ def batch_ids(ids: List[str], batch_size: int) -> List[List[str]]:
         Generator yielding batches of IDs.
     """
     for i in range(0, len(ids), batch_size):
-        yield ids[i:i + batch_size]
+        yield ids[i : i + batch_size]
+
 
 def truncate_values(record, max_length: int) -> str:
     """
@@ -47,7 +49,10 @@ def truncate_values(record, max_length: int) -> str:
     # convert back to string
     return ET.tostring(root, encoding="unicode")
 
-def xml2json(record: str, indent: Optional[int]=None, max_records: Optional[int]=None) -> str:
+
+def xml2json(
+    record: str, indent: Optional[int] = None, max_records: Optional[int] = None
+) -> str:
     """
     Convert an XML record to a JSON object.
     Args:
@@ -58,12 +63,13 @@ def xml2json(record: str, indent: Optional[int]=None, max_records: Optional[int]
         JSON object or original record if conversion fails.
     """
     if not record:
-        return ''
+        return ""
     try:
-        d = xmltodict.parse(record) 
+        d = xmltodict.parse(record)
         return json.dumps(truncate_data(d, max_records), indent=indent)
     except (ExpatError, TypeError, ValueError) as e:
         return record
+
 
 def run_cmd(cmd: list) -> Tuple[int, str, str]:
     """
@@ -78,7 +84,8 @@ def run_cmd(cmd: list) -> Tuple[int, str, str]:
     output, err = p.communicate()
     return p.returncode, output, err
 
-def to_json(results, indent: int=None) -> str:
+
+def to_json(results, indent: int = None) -> str:
     """
     Convert a dictionary to a JSON string.
     Args:
@@ -88,26 +95,25 @@ def to_json(results, indent: int=None) -> str:
     """
     if results is None:
         return "No results found"
-        
+
     def datetime_handler(obj):
-        if hasattr(obj, 'isoformat'):
+        if hasattr(obj, "isoformat"):
             return obj.isoformat()
         elif isinstance(obj, decimal.Decimal):
             return str(obj)
-        raise TypeError(f'Object of type {type(obj)} is not JSON serializable')
-    
+        raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
     # convert to json
     try:
         ret = json.dumps(
-            [dict(row) for row in results],
-            default=datetime_handler,
-            indent=indent
+            [dict(row) for row in results], default=datetime_handler, indent=indent
         )
         if ret == "[]":
             return "No results found"
         return ret
     except Exception as e:
         return f"Error converting results to JSON: {str(e)}"
+
 
 def join_accs(accessions: List[str]) -> str:
     """
@@ -117,7 +123,8 @@ def join_accs(accessions: List[str]) -> str:
     Returns:
         str: comma separated string of accessions
     """
-    return ', '.join([f"'{acc}'" for acc in accessions])
+    return ", ".join([f"'{acc}'" for acc in accessions])
+
 
 def set_entrez_access() -> None:
     """
@@ -140,9 +147,10 @@ def set_entrez_access() -> None:
     # random selection from 1 to i
     n = random.choice(email_indices)
     Entrez.email = os.getenv(f"EMAIL{n}", os.getenv("EMAIL"))
-    Entrez.api_key = os.getenv(f"NCBI_API_KEY{n}", os.getenv("NCBI_API_KEY")) 
+    Entrez.api_key = os.getenv(f"NCBI_API_KEY{n}", os.getenv("NCBI_API_KEY"))
 
-def truncate_data(data, max_items: Optional[int]=None) -> dict:
+
+def truncate_data(data, max_items: Optional[int] = None) -> dict:
     """
     Limits the number of leaf nodes in a nested data structure.
     Args:
@@ -154,15 +162,15 @@ def truncate_data(data, max_items: Optional[int]=None) -> dict:
     if max_items is None:
         return data
     count = 0
-    
+
     def process(obj):
         nonlocal count
-        
+
         # Base case: primitive values
         if isinstance(obj, (str, int, float, bool, type(None))):
             count += 1
             return obj, (count <= max_items)
-        
+
         # Handle dictionaries
         elif isinstance(obj, dict):
             result = {}
@@ -175,7 +183,7 @@ def truncate_data(data, max_items: Optional[int]=None) -> dict:
                 if not continue_processing:
                     break
             return result, (count <= max_items)
-        
+
         # Handle lists
         elif isinstance(obj, list):
             result = []
@@ -188,19 +196,19 @@ def truncate_data(data, max_items: Optional[int]=None) -> dict:
                 if not continue_processing:
                     break
             return result, (count <= max_items)
-        
+
         # Other types treated as primitives
         else:
             count += 1
             return obj, (count <= max_items)
-    
+
     limited_data, _ = process(data)
     return limited_data
 
 
 # main
-if __name__ == '__main__':
+if __name__ == "__main__":
     from dotenv import load_dotenv
+
     load_dotenv(override=True)
     set_entrez_access()
-    

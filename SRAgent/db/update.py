@@ -1,15 +1,15 @@
 # import
 ## batteries
 import os
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Tuple
+
 ## 3rd party
 import pandas as pd
-from pypika import Query, Table, Field, Column, Criterion
-import psycopg2
-from psycopg2.extras import execute_values
 from psycopg2.extensions import connection
+
 ## package
 from SRAgent.db.utils import get_unique_columns
+
 
 # functions
 def db_update(df: pd.DataFrame, table_name: str, conn: connection) -> None:
@@ -25,7 +25,7 @@ def db_update(df: pd.DataFrame, table_name: str, conn: connection) -> None:
     Raises:
         Exception: If records do not exist or an error occurs during the update.
     """
-    
+
     # Return immediately if DataFrame is empty
     if df.empty:
         return None
@@ -55,7 +55,9 @@ def db_update(df: pd.DataFrame, table_name: str, conn: connection) -> None:
     values: List[Tuple] = [tuple(x) for x in df.to_numpy()]
 
     # Identify columns that should be updated (non-unique columns)
-    non_unique_columns: List[str] = [col for col in columns if col not in unique_columns]
+    non_unique_columns: List[str] = [
+        col for col in columns if col not in unique_columns
+    ]
 
     # If there are no columns to update, raise an exception
     if not non_unique_columns:
@@ -72,14 +74,14 @@ def db_update(df: pd.DataFrame, table_name: str, conn: connection) -> None:
         try:
             # Create a VALUES template string for batch updates
             value_template = "(" + ", ".join(["%s"] * len(columns)) + ")"
-            
+
             # Generate the VALUES clause with formatted query arguments
             args_str = b",".join(cur.mogrify(value_template, val) for val in values)
 
             # Construct the SQL query using a WITH clause for batch updates
             update_query = f"""
-                WITH new_values ({', '.join(columns)}) AS (
-                    VALUES {args_str.decode('utf-8')}
+                WITH new_values ({", ".join(columns)}) AS (
+                    VALUES {args_str.decode("utf-8")}
                 )
                 UPDATE {table_name} AS t
                 SET {set_clause}
@@ -94,7 +96,9 @@ def db_update(df: pd.DataFrame, table_name: str, conn: connection) -> None:
             # Ensure that all rows were updated; otherwise, rollback and raise an error
             if cur.rowcount != len(values):
                 conn.rollback()
-                raise Exception(f"Update failed: expected {len(values)} rows updated, got {cur.rowcount}")
+                raise Exception(
+                    f"Update failed: expected {len(values)} rows updated, got {cur.rowcount}"
+                )
 
             # Commit the transaction if successful
             conn.commit()
@@ -104,25 +108,26 @@ def db_update(df: pd.DataFrame, table_name: str, conn: connection) -> None:
             conn.rollback()
             raise Exception(f"Error updating data in {table_name}: {str(e)}")
 
+
 # Main execution for testing
-if __name__ == '__main__':
+if __name__ == "__main__":
     from dotenv import load_dotenv
     from SRAgent.db.connect import db_connect
 
     # Load environment variables
     load_dotenv(override=True)
     os.environ["DYNACONF"] = "test"
-    
+
     # Test DataFrame
-    df = pd.DataFrame({
-        "database" : ["sra"],
-        "entrez_id" : [33249542],
-        "srx_accession" : ["SRX24914804"],
-        "organism": ["human"],
-    })
+    df = pd.DataFrame(
+        {
+            "database": ["sra"],
+            "entrez_id": [33249542],
+            "srx_accession": ["SRX24914804"],
+            "organism": ["human"],
+        }
+    )
 
     # Establish database connection and execute update function
     with db_connect() as conn:
         db_update(df, "srx_metadata", conn)
-
-

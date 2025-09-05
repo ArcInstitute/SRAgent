@@ -1,19 +1,24 @@
 # import
 ## batteries
 from typing import Annotated, List
+
 ## 3rd party
 from google.cloud import bigquery
 from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
+
 ## package
 from SRAgent.tools.utils import to_json, join_accs
+
 
 # functions
 @tool
 def get_study_metadata(
-    study_accessions: Annotated[List[str], "A list of SRA study accession numbers (SRP)"],
+    study_accessions: Annotated[
+        List[str], "A list of SRA study accession numbers (SRP)"
+    ],
     limit: Annotated[int, "The maximum number of records to return"] = 100,
-    config: RunnableConfig=None,
+    config: RunnableConfig = None,
 ) -> Annotated[str, "JSON string of SRA experiment metadata"]:
     """
     Get study-level metadata for a list of SRA study accessions.
@@ -44,13 +49,16 @@ def get_study_metadata(
     client = config["configurable"]["client"]
     return to_json(client.query(query))
 
-#def create_get_experiment_metadata(client):
+
+# def create_get_experiment_metadata(client):
 @tool
 def get_experiment_metadata(
-    experiment_accessions: Annotated[List[str], "A list of SRA experiment accession numbers (SRX)"],
-    limit: Annotated[int, "The maximum number of records to return"]=100,
-    config: RunnableConfig=None,
-    ) -> Annotated[str, "JSON string of SRA experiment metadata"]:
+    experiment_accessions: Annotated[
+        List[str], "A list of SRA experiment accession numbers (SRX)"
+    ],
+    limit: Annotated[int, "The maximum number of records to return"] = 100,
+    config: RunnableConfig = None,
+) -> Annotated[str, "JSON string of SRA experiment metadata"]:
     """
     Get experiment-level metadata for a list of SRA experiment accessions.
     The metadata fields returned:
@@ -101,9 +109,9 @@ def get_experiment_metadata(
 @tool
 def get_run_metadata(
     run_accessions: Annotated[List[str], "A list of SRA run accession numbers (SRR)"],
-    limit: Annotated[int, "The maximum number of records to return"]=100,
-    config: RunnableConfig=None,
-    ) -> Annotated[str, "JSON string of SRA run metadata"]:
+    limit: Annotated[int, "The maximum number of records to return"] = 100,
+    config: RunnableConfig = None,
+) -> Annotated[str, "JSON string of SRA run metadata"]:
     """
     Get run-level metadata for a list of SRA run accessions.
     The metadata fields returned:
@@ -139,9 +147,9 @@ def get_run_metadata(
 @tool
 def get_study_experiment_run(
     accessions: Annotated[List[str], "A list of SRA study accession numbers"],
-    limit: Annotated[int, "The maximum number of records to return"]=100,
-    config: RunnableConfig=None,
-    ) -> Annotated[str, "JSON string of SRA experiment metadata"]:
+    limit: Annotated[int, "The maximum number of records to return"] = 100,
+    config: RunnableConfig = None,
+) -> Annotated[str, "JSON string of SRA experiment metadata"]:
     """
     Get study, experiment, and run accessions for a list of SRA and/or ENA accessions.
     The accessions can be from any level of the SRA hierarchy: study, experiment, or run.
@@ -154,14 +162,18 @@ def get_study_experiment_run(
         return "No BigQuery client provided."
     # get study accessions
     study_acc = [x for x in accessions if x.startswith("SRP") or x.startswith("PRJNA")]
-    exp_acc = [x for x in accessions if x.startswith("SRX") or x.startswith("ERX")]        
+    exp_acc = [x for x in accessions if x.startswith("SRX") or x.startswith("ERX")]
     run_acc = [x for x in accessions if x.startswith("SRR") or x.startswith("ERR")]
 
     # create WHERE query
-    study_query = f"m.sra_study IN ({join_accs(study_acc)})" if len(study_acc) > 0 else None
-    exp_query =  f"m.experiment IN ({join_accs(exp_acc)})" if len(exp_acc) > 0 else None
+    study_query = (
+        f"m.sra_study IN ({join_accs(study_acc)})" if len(study_acc) > 0 else None
+    )
+    exp_query = f"m.experiment IN ({join_accs(exp_acc)})" if len(exp_acc) > 0 else None
     run_query = f"m.acc IN ({join_accs(run_acc)})" if len(run_acc) > 0 else None
-    query = " OR ".join([x for x in [study_query, exp_query, run_query] if x is not None])
+    query = " OR ".join(
+        [x for x in [study_query, exp_query, run_query] if x is not None]
+    )
 
     # if empty
     if query is None or query == "":
@@ -182,27 +194,27 @@ def get_study_experiment_run(
     client = config["configurable"]["client"]
     return to_json(client.query(query))
 
+
 if __name__ == "__main__":
     # setup
     from dotenv import load_dotenv
+
     load_dotenv(override=True)
-    config = {
-        "configurable": {"client": bigquery.Client()}
-    }
+    config = {"configurable": {"client": bigquery.Client()}}
 
     # test tools
     # get_study_experiment_run
-    input = {"accessions" : ["SRP548813", "SRX26939191", "SRR31573627"]}
-    #print(get_study_experiment_run.invoke(input, config=config))
+    input = {"accessions": ["SRP548813", "SRX26939191", "SRR31573627"]}
+    # print(get_study_experiment_run.invoke(input, config=config))
 
     # get_study_metadata
-    input = {"study_accessions" : ["SRP548813"]}
-    #print(get_study_metadata.invoke(input, config=config))
+    input = {"study_accessions": ["SRP548813"]}
+    # print(get_study_metadata.invoke(input, config=config))
 
     # get_experiment_metadata
-    input = {"experiment_accessions" : ["SRX26939191"]}
-    #print(get_experiment_metadata.invoke(input, config=config))
+    input = {"experiment_accessions": ["SRX26939191"]}
+    # print(get_experiment_metadata.invoke(input, config=config))
 
     # get_run_metadata
-    input = {"run_accessions" : ["SRR31573627", "SRR31573628"]}
-    #print(get_run_metadata.invoke(input, config=config))
+    input = {"run_accessions": ["SRR31573627", "SRR31573628"]}
+    # print(get_run_metadata.invoke(input, config=config))

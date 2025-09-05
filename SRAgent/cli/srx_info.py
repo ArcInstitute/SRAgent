@@ -46,9 +46,9 @@ def SRX_info_agent_parser(subparsers):
         help='Add the results to the SRAgent SQL database'
     )
     sub_parser.add_argument(
-        '--tenant', type=str, default='prod',
-        choices=['prod', 'test'],
-        help='Tenant name for the SRAgent SQL database'
+        '--tenant', type=str, default=os.getenv("DYNACONF", 'prod'),
+        choices=['prod', 'test', 'claude'],
+        help='Settings environment (also sets DYNACONF). Use "claude" to run with Claude defaults.'
 
     )
     sub_parser.add_argument(

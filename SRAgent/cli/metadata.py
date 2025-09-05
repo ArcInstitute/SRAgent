@@ -50,9 +50,9 @@ def metadata_agent_parser(subparsers):
         help='Add the results to the scBaseCount SQL database'
     )
     sub_parser.add_argument(
-        '--tenant', type=str, default='prod',
-        choices=['prod', 'test'],
-        help='Tenant name for the SRAgent SQL database'
+        '--tenant', type=str, default=os.getenv("DYNACONF", 'prod'),
+        choices=['prod', 'test', 'claude'],
+        help='Settings environment (also sets DYNACONF). Use "claude" to run with Claude defaults.'
     )
     sub_parser.add_argument(
         '--write-graph', type=str, metavar='FILE', default=None,

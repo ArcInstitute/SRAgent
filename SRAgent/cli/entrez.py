@@ -30,6 +30,11 @@ def entrez_agent_parser(subparsers):
     sub_parser.add_argument('--recursion-limit', type=int, default=40,
                             help='Maximum recursion limit')
     sub_parser.add_argument(
+        '--tenant', type=str, default=os.getenv("DYNACONF", 'prod'),
+        choices=['prod', 'test', 'claude'],
+        help='Settings environment (also sets DYNACONF). Use "claude" to run with Claude defaults.'
+    )
+    sub_parser.add_argument(
         '--write-graph', type=str, metavar='FILE', default=None,
         help='Write the workflow graph to a file and exit (supports .png, .svg, .pdf, .mermaid formats)'
     )
@@ -38,6 +43,10 @@ def entrez_agent_main(args):
     """
     Main function for invoking the entrez agent
     """
+    # set tenant early so model selection reflects it
+    if getattr(args, 'tenant', None):
+        os.environ["DYNACONF"] = args.tenant
+
     # set email and api key
     Entrez.email = os.getenv("EMAIL")
     Entrez.api_key = os.getenv("NCBI_API_KEY")

@@ -1,20 +1,19 @@
 # import
 ## batteries
 import os
-import warnings
-from typing import List, Dict, Any, Tuple, Optional
+from typing import Dict, Any
+
 ## 3rd party
 import psycopg2
-import pandas as pd
-from pypika import Query, Table, Field, Column, Criterion
-from psycopg2.extras import execute_values
+from pypika import Query, Column
 from psycopg2.extensions import connection
+
 ## package
 from SRAgent.db.utils import execute_query
 
+
 # functions
 def create_updated_at_trigger(tbl_name: str, conn: connection) -> None:
-
     # Define the raw SQL for the trigger function and trigger
     trigger_function_sql = """
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -39,10 +38,11 @@ EXECUTE FUNCTION update_updated_at_column();
         cur.execute(trigger_sql)
         conn.commit()
 
+
 def create_srx_metadata(conn: connection) -> None:
     tbl_name = "srx_metadata"
-    stmt = Query \
-        .create_table(tbl_name) \
+    stmt = (
+        Query.create_table(tbl_name)
         .columns(
             Column("database", "VARCHAR(20)", nullable=False),
             Column("entrez_id", "INT", nullable=False),
@@ -64,30 +64,34 @@ def create_srx_metadata(conn: connection) -> None:
             Column("notes", "TEXT"),
             Column("created_at", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"),
             Column("updated_at", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"),
-        ) \
+        )
         .unique("database", "entrez_id")
-    
+    )
+
     execute_query(stmt, conn)
     create_updated_at_trigger(tbl_name, conn)
 
+
 def create_srx_srr(conn: connection) -> None:
     tbl_name = "srx_srr"
-    stmt = Query \
-        .create_table(tbl_name) \
+    stmt = (
+        Query.create_table(tbl_name)
         .columns(
             Column("srx_accession", "VARCHAR(20)", nullable=False),
             Column("srr_accession", "VARCHAR(20)", nullable=False),
             Column("created_at", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"),
             Column("updated_at", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"),
-        ) \
+        )
         .unique("srx_accession", "srr_accession")
+    )
     execute_query(stmt, conn)
     create_updated_at_trigger(tbl_name, conn)
 
+
 def create_eval(conn: connection) -> None:
     tbl_name = "eval"
-    stmt = Query \
-        .create_table(tbl_name) \
+    stmt = (
+        Query.create_table(tbl_name)
         .columns(
             Column("dataset_id", "VARCHAR(30)", nullable=False),
             Column("database", "VARCHAR(20)", nullable=False),
@@ -102,15 +106,17 @@ def create_eval(conn: connection) -> None:
             Column("organism", "VARCHAR(80)"),
             Column("created_at", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"),
             Column("updated_at", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"),
-        ) \
+        )
         .unique("dataset_id", "database", "entrez_id")
+    )
     execute_query(stmt, conn)
     create_updated_at_trigger(tbl_name, conn)
 
+
 def create_screcounter_log(conn: connection) -> None:
     tbl_name = "screcounter_log"
-    stmt = Query \
-        .create_table(tbl_name) \
+    stmt = (
+        Query.create_table(tbl_name)
         .columns(
             Column("sample", "VARCHAR(20)", nullable=False),
             Column("accession", "VARCHAR(20)"),
@@ -120,15 +126,17 @@ def create_screcounter_log(conn: connection) -> None:
             Column("message", "VARCHAR(200)", nullable=False),
             Column("created_at", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"),
             Column("updated_at", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"),
-        ) \
+        )
         .unique("sample", "accession", "process", "step")
+    )
     execute_query(stmt, conn)
     create_updated_at_trigger(tbl_name, conn)
 
+
 def create_screcounter_star_params(conn: connection) -> None:
     tbl_name = "screcounter_star_params"
-    stmt = Query \
-        .create_table(tbl_name) \
+    stmt = (
+        Query.create_table(tbl_name)
         .columns(
             Column("sample", "VARCHAR(20)", nullable=False),
             Column("barcodes", "VARCHAR(100)"),
@@ -138,17 +146,19 @@ def create_screcounter_star_params(conn: connection) -> None:
             Column("strand", "VARCHAR(20)"),
             Column("created_at", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"),
             Column("updated_at", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"),
-        ) \
+        )
         .unique("sample")
+    )
     execute_query(stmt, conn)
     create_updated_at_trigger(tbl_name, conn)
 
+
 def create_screcounter_star_results(conn: connection) -> None:
     tbl_name = "screcounter_star_results"
-    stmt = Query \
-        .create_table(tbl_name) \
+    stmt = (
+        Query.create_table(tbl_name)
         .columns(
-            Column("sample", "VARCHAR(20)", nullable=False),   # aka: srx_accession
+            Column("sample", "VARCHAR(20)", nullable=False),  # aka: srx_accession
             Column("feature", "VARCHAR(30)", nullable=False),  # STAR feature type
             Column("estimated_number_of_cells", "INT"),
             Column("fraction_of_unique_reads_in_cells", "FLOAT"),
@@ -166,10 +176,21 @@ def create_screcounter_star_results(conn: connection) -> None:
             Column("reads_mapped_to_gene__unique_multiple_gene", "FLOAT"),
             Column("reads_mapped_to_genefull__unique_genefull", "FLOAT"),
             Column("reads_mapped_to_genefull__unique_multiple_genefull", "FLOAT"),
-            Column("reads_mapped_to_genefull_ex50pas__unique_genefull_ex50pas", "FLOAT"),
-            Column("reads_mapped_to_genefull_ex50pas__unique_multiple_genefull_ex50pas", "FLOAT"),
-            Column("reads_mapped_to_genefull_exonoverintron__unique_genefull_exonoverintron", "FLOAT"),
-            Column("reads_mapped_to_genefull_exonoverintron__unique_multiple_genefull_exonoverintron", "FLOAT"),
+            Column(
+                "reads_mapped_to_genefull_ex50pas__unique_genefull_ex50pas", "FLOAT"
+            ),
+            Column(
+                "reads_mapped_to_genefull_ex50pas__unique_multiple_genefull_ex50pas",
+                "FLOAT",
+            ),
+            Column(
+                "reads_mapped_to_genefull_exonoverintron__unique_genefull_exonoverintron",
+                "FLOAT",
+            ),
+            Column(
+                "reads_mapped_to_genefull_exonoverintron__unique_multiple_genefull_exonoverintron",
+                "FLOAT",
+            ),
             Column("reads_mapped_to_genome__unique", "FLOAT"),
             Column("reads_mapped_to_genome__unique_multiple", "FLOAT"),
             Column("reads_mapped_to_velocyto__unique_velocyto", "FLOAT"),
@@ -184,15 +205,17 @@ def create_screcounter_star_results(conn: connection) -> None:
             Column("unique_reads_in_cells_mapped_to_genefull_exonoverintron", "FLOAT"),
             Column("created_at", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"),
             Column("updated_at", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"),
-        ) \
+        )
         .unique("sample", "feature")
+    )
     execute_query(stmt, conn)
     create_updated_at_trigger(tbl_name, conn)
 
+
 def create_screcounter_trace(conn: connection) -> None:
     tbl_name = "screcounter_trace"
-    stmt = Query \
-        .create_table(tbl_name) \
+    stmt = (
+        Query.create_table(tbl_name)
         .columns(
             Column("task_id", "INT", nullable=False),
             Column("hash", "VARCHAR(12)", nullable=False),
@@ -209,7 +232,7 @@ def create_screcounter_trace(conn: connection) -> None:
             Column("attempt", "INT"),
             Column("duration", "VARCHAR(24)"),
             Column("realtime", "VARCHAR(24)"),
-            Column("cpu_percent", "VARCHAR(24)"), 
+            Column("cpu_percent", "VARCHAR(24)"),
             Column("peak_rss", "VARCHAR(24)"),
             Column("peak_vmem", "VARCHAR(24)"),
             Column("rchar", "VARCHAR(24)"),
@@ -218,15 +241,17 @@ def create_screcounter_trace(conn: connection) -> None:
             Column("scratch", "VARCHAR(24)"),
             Column("created_at", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"),
             Column("updated_at", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"),
-        ) \
+        )
         .unique("hash", "native_id")
+    )
     execute_query(stmt, conn)
     create_updated_at_trigger(tbl_name, conn)
 
+
 def create_scbasecamp_metadata(conn: connection) -> None:
     tbl_name = "scbasecamp_metadata"
-    stmt = Query \
-        .create_table(tbl_name) \
+    stmt = (
+        Query.create_table(tbl_name)
         .columns(
             Column("entrez_id", "INT", nullable=False),
             Column("srx_accession", "VARCHAR(20)", nullable=False),
@@ -246,11 +271,13 @@ def create_scbasecamp_metadata(conn: connection) -> None:
             Column("czi_collection_name", "VARCHAR(300)"),
             Column("created_at", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"),
             Column("updated_at", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"),
-        ) \
+        )
         .unique("entrez_id", "srx_accession", "feature_type")
-    
+    )
+
     execute_query(stmt, conn)
     create_updated_at_trigger(tbl_name, conn)
+
 
 def create_table_router() -> Dict[str, Any]:
     router = {
@@ -264,6 +291,7 @@ def create_table_router() -> Dict[str, Any]:
         "scbasecamp_metadata": create_scbasecamp_metadata,
     }
     return router
+
 
 def create_table(table_name: str, conn: connection) -> None:
     # router
@@ -279,15 +307,17 @@ def create_table(table_name: str, conn: connection) -> None:
     else:
         raise ValueError(f"Table {table_name} not recognized")
 
+
 # main
 if __name__ == "__main__":
     from dotenv import load_dotenv
     from SRAgent.db.connect import db_connect
+
     load_dotenv(override=True)
 
     # connect to db
     os.environ["DYNACONF"] = "test"
     with db_connect() as conn:
         # create tables
-        #create_srx_metadata()
+        # create_srx_metadata()
         create_scbasecamp_metadata(conn)

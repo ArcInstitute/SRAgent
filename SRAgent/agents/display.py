@@ -1,21 +1,18 @@
-import os
 import re
-import sys
-from importlib import resources
-from typing import Dict, Any, Optional
-from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
+from typing import Any, Optional
+from langchain_core.runnables import RunnableSequence
 from langchain_core.prompts import PromptTemplate
-from dynaconf import Dynaconf
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.panel import Panel
-from rich.text import Text
 from rich.markdown import Markdown
 from SRAgent.agents.utils import set_model
 
+
 # functions
-def create_step_summary_chain(model: Optional[str]=None, max_tokens: int=45):
+def create_step_summary_chain(
+    model: Optional[str] = None, max_tokens: int = 45
+) -> RunnableSequence:
     """
     Create a chain of tools to summarize each step in a workflow.
     Args:
@@ -25,14 +22,16 @@ def create_step_summary_chain(model: Optional[str]=None, max_tokens: int=45):
         A chain of tools to summarize each step in a workflow.
     """
     # Create the prompt template
-    template = "\n".join([
-        "Concisely summarize the provided step in the langgraph workflow.",
-        f"The summary must be {max_tokens} tokens or less.",
-        "Do not use introductory words such as \"The workflow step involves\"",
-        "Write your output as plain text instead of markdown.",
-        "#-- The workflow step --#",
-        "{step}"
-    ])
+    template = "\n".join(
+        [
+            "Concisely summarize the provided step in the langgraph workflow.",
+            f"The summary must be {max_tokens} tokens or less.",
+            'Do not use introductory words such as "The workflow step involves"',
+            "Write your output as plain text instead of markdown.",
+            "#-- The workflow step --#",
+            "{step}",
+        ]
+    )
     prompt = PromptTemplate(input_variables=["step"], template=template)
 
     # Initialize the language model
@@ -53,15 +52,20 @@ def format_agent_message(message_content: str, agent_name: str) -> str:
     """
     # Clean up common patterns
     content = message_content.strip()
-    
+
     # extract content from message_content if complex string
     match = re.search(r"content='(.*?)'", str(message_content), re.DOTALL)
     if match:
         content = match.group(1)
-    
+
     # Convert literal \n to actual newlines and handle other escape sequences
-    content = content.replace('\\n', '\n').replace('\\t', '\t').replace("\\'", "'").replace('\\"', '"')
-    
+    content = (
+        content.replace("\\n", "\n")
+        .replace("\\t", "\t")
+        .replace("\\'", "'")
+        .replace('\\"', '"')
+    )
+
     # Check for error messages
     if content.startswith("Error:") or content.startswith("I am currently unable"):
         return f"[red]{content}[/red]"
@@ -69,48 +73,58 @@ def format_agent_message(message_content: str, agent_name: str) -> str:
     # limit the string to 100 characters
     if len(content) > 100:
         content = content[:100].rstrip() + "..."
-    
+
     # General formatting for all agents
-    lines = content.split('\n')
+    lines = content.split("\n")
     formatted_lines = []
-    
+
     for line in lines:
         line = line.strip()
         if line:
             # Section headers (lines ending with colon and short enough)
-            if line.endswith(':') and len(line) < 60:
+            if line.endswith(":") and len(line) < 60:
                 formatted_lines.append(f"[bold yellow]{line}[/bold yellow]")
             # Key-value pairs (contain colon but don't end with colon)
-            elif ':' in line and not line.endswith(':') and len(line.split(':', 1)[0]) < 40:
-                parts = line.split(':', 1)
-                formatted_lines.append(f"[bold cyan]{parts[0]}:[/bold cyan] {parts[1].strip()}")
+            elif (
+                ":" in line
+                and not line.endswith(":")
+                and len(line.split(":", 1)[0]) < 40
+            ):
+                parts = line.split(":", 1)
+                formatted_lines.append(
+                    f"[bold cyan]{parts[0]}:[/bold cyan] {parts[1].strip()}"
+                )
             # Bullet points
-            elif line.startswith(("•", "-", "*")) or line.startswith(("  •", "  -", "  *")):
+            elif line.startswith(("•", "-", "*")) or line.startswith(
+                ("  •", "  -", "  *")
+            ):
                 formatted_lines.append(f"[green]{line}[/green]")
             # Lines that look like accession numbers or IDs
-            elif re.match(r'^[A-Z]{2,3}[0-9]{6,}', line.split()[0] if line.split() else ''):
+            elif re.match(
+                r"^[A-Z]{2,3}[0-9]{6,}", line.split()[0] if line.split() else ""
+            ):
                 formatted_lines.append(f"[cyan]{line}[/cyan]")
             # Regular lines
             else:
                 formatted_lines.append(line)
         else:
             # Preserve empty lines for spacing
-            formatted_lines.append('')
-    
-    return '\n'.join(formatted_lines)
+            formatted_lines.append("")
+
+    return "\n".join(formatted_lines)
 
 
 def display_step_simple(console: Console, step_cnt: int, step: Any):
     """
     Display a step in simple format for --no-summaries mode.
     """
-    if isinstance(step, dict) and 'messages' in step:
-        if isinstance(step['messages'], list) and step['messages']:
-            msg = step['messages'][-1]
-        elif isinstance(step['messages'], str):
-            msg = step['messages']
-        if hasattr(msg, 'content'):
-            agent_name = getattr(msg, 'name', 'agent')
+    if isinstance(step, dict) and "messages" in step:
+        if isinstance(step["messages"], list) and step["messages"]:
+            msg = step["messages"][-1]
+        elif isinstance(step["messages"], str):
+            msg = step["messages"]
+        if hasattr(msg, "content"):
+            agent_name = getattr(msg, "name", "agent")
             if not agent_name:
                 agent_name = "No agent"
             msg = format_agent_message(msg.content.strip(), agent_name)
@@ -124,15 +138,15 @@ def display_step_simple(console: Console, step_cnt: int, step: Any):
         else:
             step_cnt -= 1
         # print the step
-        console.print(f"[bold green]✅ Step {step_cnt}[/bold green]\n[dim]{msg}[/dim]")    
+        console.print(f"[bold green]✅ Step {step_cnt}[/bold green]\n[dim]{msg}[/dim]")
 
 
 async def create_agent_stream(
-    input,  
+    input,
     create_agent_func,
-    config: dict={}, 
-    summarize_steps: bool=False,
-    no_progress: bool=False
+    config: dict = {},
+    summarize_steps: bool = False,
+    no_progress: bool = False,
 ) -> str:
     """
     Create an Entrez agent and stream the steps.
@@ -150,42 +164,46 @@ async def create_agent_stream(
 
     # create step summary chain
     step_summary_chain = create_step_summary_chain() if summarize_steps else None
-    
+
     # Initialize rich console
     console = Console(stderr=True)
-    
+
     # Print header
-    console.print(Panel.fit(
-        f"[bold green]🤖 SRAgent Processing Request[/bold green]\n\n"
-        f"[yellow]Query:[/yellow] {input['messages'][0].content}",
-        border_style="green",
-        padding=(1, 2)
-    ))
+    console.print(
+        Panel.fit(
+            f"[bold green]🤖 SRAgent Processing Request[/bold green]\n\n"
+            f"[yellow]Query:[/yellow] {input['messages'][0].content}",
+            border_style="green",
+            padding=(1, 2),
+        )
+    )
     console.print()
-    
+
     # invoke agent
     step_cnt = 0
     final_step = ""
-    
+
     if no_progress:
         # No progress bar mode
         async for step in agent.astream(input, stream_mode="values", config=config):
             step_cnt += 1
             final_step = step
-            
+
             # summarize step
             if step_summary_chain:
                 # Handle different step formats
                 step_messages = None
-                if isinstance(step, dict) and 'messages' in step:
+                if isinstance(step, dict) and "messages" in step:
                     step_messages = step.get("messages")
                 elif isinstance(step, list):
                     step_messages = step
                 else:
                     step_messages = str(step)
-                
+
                 msg = await step_summary_chain.ainvoke({"step": step_messages})
-                console.print(f"[bold green]✅ Step {step_cnt}:[/bold green] {msg.content}")
+                console.print(
+                    f"[bold green]✅ Step {step_cnt}:[/bold green] {msg.content}"
+                )
             else:
                 # No summaries mode - use simple display
                 display_step_simple(console, step_cnt, step)
@@ -195,36 +213,40 @@ async def create_agent_stream(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console,
-            transient=True
+            transient=True,
         ) as progress:
             task = progress.add_task("[cyan]Processing...", total=None)
-            
+
             async for step in agent.astream(input, stream_mode="values", config=config):
                 step_cnt += 1
                 final_step = step
-                
+
                 # Update progress
-                progress.update(task, description=f"[cyan]Step {step_cnt}: Processing...")
-                
+                progress.update(
+                    task, description=f"[cyan]Step {step_cnt}: Processing..."
+                )
+
                 # summarize step
                 if step_summary_chain:
                     # Handle different step formats
                     step_messages = None
-                    if isinstance(step, dict) and 'messages' in step:
+                    if isinstance(step, dict) and "messages" in step:
                         step_messages = step.get("messages")
                     elif isinstance(step, list):
                         step_messages = step
                     else:
                         step_messages = str(step)
-                    
+
                     msg = await step_summary_chain.ainvoke({"step": step_messages})
-                    console.print(f"[bold green]✅ Step {step_cnt}:[/bold green] {msg.content}")
+                    console.print(
+                        f"[bold green]✅ Step {step_cnt}:[/bold green] {msg.content}"
+                    )
                 else:
                     # No summaries mode - use simple display
                     display_step_simple(console, step_cnt, step)
-    
+
     console.print()  # Add spacing before final results
-    
+
     # get final step, and handle different types
     try:
         final_step = final_step["agent"]["messages"][-1].content
@@ -248,13 +270,13 @@ async def create_agent_stream(
 def display_final_results(results: Any, title: str = "✨ Final Results ✨") -> None:
     """
     Display final results with rich formatting in a consistent format.
-    
+
     Args:
         results: The results to display (can be string, list, or other types)
         title: The title to display as a header
     """
     console = Console()
-    
+
     if results:
         # Convert results to string if needed
         if isinstance(results, list):
@@ -265,12 +287,12 @@ def display_final_results(results: Any, title: str = "✨ Final Results ✨") ->
                 formatted_results = str(results)
         else:
             formatted_results = str(results)
-        
+
         # Display title as header
         console.print(f"\n[bold green]{title}[/bold green]")
-        
+
         # Display results without box
-        if any(char in formatted_results for char in ['#', '*', '-', '1.', '2.']):
+        if any(char in formatted_results for char in ["#", "*", "-", "1.", "2."]):
             console.print(Markdown(formatted_results))
         else:
             console.print(formatted_results)

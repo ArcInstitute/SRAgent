@@ -8,40 +8,42 @@ import shutil
 import tarfile
 import tempfile
 import requests
-import urllib.parse
 from typing import Annotated
 from functools import lru_cache
+
 ## 3rd party
 from langchain_core.tools import tool
 import obonet
 import networkx as nx
 import appdirs
+
 ## package
 from SRAgent.tools.vector_db import load_vector_store
+
 
 # functions
 @tool
 def query_vector_db(
     query: Annotated[str, "The semantic search query"],
-    k: Annotated[int, "The number of results to return"]=3,
-    ) -> str: 
+    k: Annotated[int, "The number of results to return"] = 3,
+) -> str:
     """
-    Perform a semantic search by querying a vector store 
+    Perform a semantic search by querying a vector store
     """
     # Determine the cache directory using appdirs
     cache_dir = appdirs.user_cache_dir("SRAgent")
     chroma_dir_name = "uberon-full_chroma"
     chroma_dir_path = os.path.join(cache_dir, chroma_dir_name)
-    
+
     # Create the cache directory if it doesn't exist
     os.makedirs(cache_dir, exist_ok=True)
-    
+
     # Check if the Chroma DB directory exists
     if not os.path.exists(chroma_dir_path) or not os.listdir(chroma_dir_path):
         # Download and extract the tarball
         gcp_url = "https://storage.googleapis.com/arc-scbasecount/2025-02-25/tissue_ontology/uberon-full_chroma.tar.gz"
         tarball_path = os.path.join(cache_dir, "uberon-full_chroma.tar.gz")
-        
+
         print(f"Downloading Chroma DB from {gcp_url}...", file=sys.stdout)
         try:
             # Download the tarball
@@ -50,9 +52,9 @@ def query_vector_db(
             with open(tarball_path, "wb") as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
-            
+
             print(f"Downloaded to {tarball_path}, extracting...", file=sys.stdout)
-            
+
             # Extract the tarball
             with tarfile.open(tarball_path) as tar:
                 # Create a temporary directory for extraction
@@ -69,22 +71,25 @@ def query_vector_db(
                                 shutil.rmtree(chroma_dir_path)
                             # Move the extracted directory to the cache
                             shutil.move(extracted_dir, chroma_dir_path)
-            
-            print(f"Extraction complete, Chroma DB available at {chroma_dir_path}", file=sys.stdout)
-            
+
+            print(
+                f"Extraction complete, Chroma DB available at {chroma_dir_path}",
+                file=sys.stdout,
+            )
+
             # Clean up the downloaded tarball
             os.remove(tarball_path)
         except Exception as e:
             return f"Error downloading or extracting Chroma DB: {e}"
-    
+
     # Load the vector store
     vector_store = load_vector_store(chroma_dir_path, collection_name="uberon")
-    
+
     # Query the vector store
     message = ""
     try:
         results = vector_store.similarity_search(query, k=k)
-        message += f"# Results for query: \"{query}\"\n"
+        message += f'# Results for query: "{query}"\n'
         for i, res in enumerate(results, 1):
             id = res.metadata.get("id", "No ID available")
             if not id:
@@ -96,11 +101,15 @@ def query_vector_db(
     except Exception as e:
         return f"Error performing search: {e}"
     if not message:
-        message = f"No results found for query: \"{query}\". Consider refining your query."
+        message = (
+            f'No results found for query: "{query}". Consider refining your query.'
+        )
     return message
+
 
 # Cache for the ontology graph
 _ONTOLOGY_GRAPH = None
+
 
 @lru_cache(maxsize=1)
 def get_uberon_ontology_graph(obo_path: str) -> nx.MultiDiGraph:
@@ -114,29 +123,31 @@ def get_uberon_ontology_graph(obo_path: str) -> nx.MultiDiGraph:
     """
     return obonet.read_obo(obo_path)
 
+
 def all_neighbors(g, node):
     """Get all neighbors of a node in a directed graph, regardless of edge direction."""
     return set(g.predecessors(node)) | set(g.successors(node))
 
-@tool 
+
+@tool
 def get_neighbors(
     uberon_id: Annotated[str, "The Uberon ID (UBERON:XXXXXXX)"],
-    ) -> str: 
+) -> str:
     """
     Get the neighbors of a given Uberon ID in the Uberon tissue ontology.
     """
     # check the ID format
     if not re.match(r"UBERON:\d{7}", uberon_id):
-        return f"Invalid Uberon ID format: \"{uberon_id}\". The format must be \"UBERON:XXXXXXX\"."
+        return f'Invalid Uberon ID format: "{uberon_id}". The format must be "UBERON:XXXXXXX".'
 
     # Determine the cache directory using appdirs
     cache_dir = appdirs.user_cache_dir("SRAgent")
     obo_filename = "uberon-full.obo"
     obo_path = os.path.join(cache_dir, obo_filename)
-    
+
     # Create the cache directory if it doesn't exist
     os.makedirs(cache_dir, exist_ok=True)
-    
+
     # Download the OBO file if it doesn't exist
     if not os.path.exists(obo_path) or not os.listdir(cache_dir):
         obo_url = "http://purl.obolibrary.org/obo/uberon/uberon-full.obo"
@@ -156,8 +167,8 @@ def get_neighbors(
     # get neighbors
     message = ""
     try:
-        message += f"# Neighbors in the ontology for: \"{uberon_id}\"\n"
-        for i,node_id in enumerate(all_neighbors(g, uberon_id), 1):
+        message += f'# Neighbors in the ontology for: "{uberon_id}"\n'
+        for i, node_id in enumerate(all_neighbors(g, uberon_id), 1):
             # filter out non-UBERON nodes
             if not node_id.startswith("UBERON:") or not g.nodes[node_id]:
                 continue
@@ -174,25 +185,29 @@ def get_neighbors(
         return f"Error getting neighbors: {e}"
 
     if not message:
-        message = f"No neighbors found for ID: \"{uberon_id}\"."
+        message = f'No neighbors found for ID: "{uberon_id}".'
     return message
+
 
 @tool
 def query_uberon_ols(
-    search_term: Annotated[str, "The term to search for in the Uberon ontology"]
+    search_term: Annotated[str, "The term to search for in the Uberon ontology"],
 ) -> str:
     """
     Query the Ontology Lookup Service (OLS) for Uberon terms matching the search term.
     """
     # Format search term for URL (handle special characters)
     import urllib.parse
+
     encoded_search_term = urllib.parse.quote(search_term)
-    #print(f"Encoded search term: {encoded_search_term}"); exit();
-    
-    url = f"https://www.ebi.ac.uk/ols/api/search?q={encoded_search_term}&ontology=uberon"
+    # print(f"Encoded search term: {encoded_search_term}"); exit();
+
+    url = (
+        f"https://www.ebi.ac.uk/ols/api/search?q={encoded_search_term}&ontology=uberon"
+    )
     max_retries = 2
     retry_delay = 1
-    
+
     for retry in range(max_retries):
         try:
             response = requests.get(url)
@@ -228,8 +243,10 @@ def query_uberon_ols(
         message += f"{i}. {obo_id} - {label}\n   Description: {description}\n"
     return message
 
+
 if __name__ == "__main__":
     from dotenv import load_dotenv
+
     load_dotenv(override=True)
 
     # semantic search
@@ -238,15 +255,12 @@ if __name__ == "__main__":
     # print(results); exit();
 
     # #  get neighbors
-    input = {'uberon_id': 'UBERON:0000010'}
-    #input = {'uberon_id': 'UBERON:0002421'}
+    input = {"uberon_id": "UBERON:0000010"}
+    # input = {'uberon_id': 'UBERON:0002421'}
     neighbors = get_neighbors.invoke(input)
-    print(neighbors); exit();
-
+    print(neighbors)
+    exit()
     # query OLS
-    input = {'search_term': "bone marrow"}
+    input = {"search_term": "bone marrow"}
     results = query_uberon_ols.invoke(input)
     print(results)
-    
-
-    

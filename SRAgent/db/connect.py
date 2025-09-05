@@ -3,18 +3,16 @@
 import os
 import warnings
 from importlib import resources
-from typing import List, Dict, Any, Tuple, Optional
 from tempfile import NamedTemporaryFile
+
 ## 3rd party
-import pandas as pd
 import psycopg2
-from pypika import Query, Table, Field, Column, Criterion
-from psycopg2.extras import execute_values
 from psycopg2.extensions import connection
 from dynaconf import Dynaconf
 
 # Suppress the specific warning
 warnings.filterwarnings("ignore", message="pandas only supports SQLAlchemy connectable")
+
 
 # functions
 def db_connect() -> connection:
@@ -26,28 +24,29 @@ def db_connect() -> connection:
     s_path1 = os.path.join(os.path.dirname(package_path), "settings.yml")
     s_path2 = str(resources.files("SRAgent").joinpath("settings.yml"))
     settings = Dynaconf(
-        settings_files=["settings.yml", s_path1, s_path2], 
+        settings_files=["settings.yml", s_path1, s_path2],
         environments=True,
         merge_enabled=True,
-        env_switcher="DYNACONF"
+        env_switcher="DYNACONF",
     )
 
     # get db certs
     certs = get_db_certs()
     # connect to db
     db_params = {
-        'host': settings.db_host,
-        'database': settings.db_name,
-        'user': settings.db_user,
-        'password': get_secret("GCP_SQL_DB_PASSWORD"),
-        'port': settings.db_port,
-        'sslmode': 'verify-ca',
-        'sslrootcert': certs["server-ca.pem"],
-        'sslcert': certs["client-cert.pem"],
-        'sslkey': certs["client-key.pem"],
-        'connect_timeout': settings.db_timeout
+        "host": settings.db_host,
+        "database": settings.db_name,
+        "user": settings.db_user,
+        "password": get_secret("GCP_SQL_DB_PASSWORD"),
+        "port": settings.db_port,
+        "sslmode": "verify-ca",
+        "sslrootcert": certs["server-ca.pem"],
+        "sslcert": certs["client-cert.pem"],
+        "sslkey": certs["client-key.pem"],
+        "connect_timeout": settings.db_timeout,
     }
     return psycopg2.connect(**db_params)
+
 
 def get_db_certs(certs=["server-ca.pem", "client-cert.pem", "client-key.pem"]) -> dict:
     """
@@ -60,12 +59,13 @@ def get_db_certs(certs=["server-ca.pem", "client-cert.pem", "client-key.pem"]) -
     idx = {
         "server-ca.pem": "SRAgent_db_server_ca",
         "client-cert.pem": "SRAgent_db_client_cert",
-        "client-key.pem": "SRAgent_db_client_key"
+        "client-key.pem": "SRAgent_db_client_key",
     }
     cert_files = {}
     for cert in certs:
         cert_files[cert] = download_secret(idx[cert])
     return cert_files
+
 
 def download_secret(secret_id: str) -> str:
     """
@@ -76,11 +76,12 @@ def download_secret(secret_id: str) -> str:
         The path to the temporary file containing the secret
     """
     secret_value = get_secret(secret_id)
-    temp_file = NamedTemporaryFile(delete=False, mode='w', encoding='utf-8')
+    temp_file = NamedTemporaryFile(delete=False, mode="w", encoding="utf-8")
     with temp_file as f:
         f.write(secret_value)
         f.flush()
     return temp_file.name
+
 
 def get_secret(secret_id: str) -> str:
     """
@@ -101,23 +102,23 @@ def get_secret(secret_id: str) -> str:
         name = f"projects/{project_id}/secrets/{secret_id}/versions/latest"
         client = secretmanager.SecretManagerServiceClient()
         response = client.access_secret_version(request={"name": name})
-        return response.payload.data.decode('UTF-8')
+        return response.payload.data.decode("UTF-8")
     except Exception as e:
         # Fall back to environment variable
         env_var = os.getenv(secret_id)
         if env_var is not None:
             return env_var
-        raise Exception(f"Failed to get secret '{secret_id}' from Secret Manager and environment variable not set") from e
+        raise Exception(
+            f"Failed to get secret '{secret_id}' from Secret Manager and environment variable not set"
+        ) from e
 
 
 # main
-if __name__ == '__main__':
+if __name__ == "__main__":
     from dotenv import load_dotenv
+
     load_dotenv(override=True)
 
     os.environ["DYNACONF"] = "test"
     with db_connect() as conn:
-       print(conn)
-    
-
-    
+        print(conn)

@@ -1,14 +1,9 @@
 # import
 ## batteries
-import os
-import sys
-import warnings
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List
+
 ## 3rd party
 import psycopg2
-import pandas as pd
-from pypika import Query, Table, Field, Column, Criterion
-from psycopg2.extras import execute_values
 from psycopg2.extensions import connection
 
 
@@ -34,6 +29,7 @@ WHERE state != 'idle';
     print(f"No. of blocking processes: {len(PIDs)}")
     return PIDs
 
+
 def delete_blocking(PIDs: List[int]) -> None:
     # Terminate blocking processes using a new connection
     termination_query = "SELECT pg_terminate_backend(%s);"
@@ -47,10 +43,12 @@ def delete_blocking(PIDs: List[int]) -> None:
         except psycopg2.Error as e:
             print(f"Error terminating process {pid}: {e}")
 
+
 # main
 if __name__ == "__main__":
     from dotenv import load_dotenv
     from SRAgent.db.connect import db_connect
+
     load_dotenv()
 
     PIDs = None

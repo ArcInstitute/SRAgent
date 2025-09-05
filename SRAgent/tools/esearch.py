@@ -3,18 +3,20 @@
 import os
 import sys
 import time
-from datetime import datetime, timedelta
-from typing import Annotated, List, Dict, Optional
+from typing import Annotated, List, Optional
 from urllib.error import HTTPError
+
 ## 3rd party
 from Bio import Entrez
 from langchain_core.tools import tool
 from langchain_core.runnables.config import RunnableConfig
+
 ## package
 from SRAgent.tools.utils import set_entrez_access
 from SRAgent.db.connect import db_connect
 from SRAgent.db.get import db_get_entrez_ids
 from SRAgent.organisms import OrganismEnum
+
 
 # functions
 def to_sci_name(organism: str) -> str:
@@ -22,41 +24,50 @@ def to_sci_name(organism: str) -> str:
     Convert organism name to scientific name using OrganismEnum.
     """
     organism_str = organism.replace(" ", "_").upper()
-    
+
     try:
         enum_name = OrganismEnum[organism_str].value
         return f'"{enum_name}"'
     except KeyError:
         raise ValueError(f"Organism '{organism}' not found in OrganismEnum.")
 
-## default time span limits
-#MAX_DATE = (datetime.now()).strftime('%Y/%m/%d')
-#MIN_DATE = (datetime.now() - timedelta(days=7 * 365)).strftime('%Y/%m/%d')
 
-@tool 
+## default time span limits
+# MAX_DATE = (datetime.now()).strftime('%Y/%m/%d')
+# MIN_DATE = (datetime.now() - timedelta(days=7 * 365)).strftime('%Y/%m/%d')
+
+
+@tool
 def esearch_scrna(
-    query_terms: Annotated[List[str], "Entrez query terms"]=["10X Genomics", "single cell RNA sequencing", "single cell RNA-seq"],
-    database: Annotated[str, "Database name ('sra' or 'gds')"]="sra",
-    organisms: Annotated[List[str], "List of organisms to search."]=["human", "mouse"],
-    max_ids: Annotated[Optional[int], "Maximum number of IDs to return."]=10,
-    config: RunnableConfig=None,
-    )-> Annotated[List[str], "Entrez IDs of database records"]:
+    query_terms: Annotated[List[str], "Entrez query terms"] = [
+        "10X Genomics",
+        "single cell RNA sequencing",
+        "single cell RNA-seq",
+    ],
+    database: Annotated[str, "Database name ('sra' or 'gds')"] = "sra",
+    organisms: Annotated[List[str], "List of organisms to search."] = [
+        "human",
+        "mouse",
+    ],
+    max_ids: Annotated[Optional[int], "Maximum number of IDs to return."] = 10,
+    config: RunnableConfig = None,
+) -> Annotated[List[str], "Entrez IDs of database records"]:
     """
     Find scRNA-seq datasets in the SRA or GEO databases.
     """
-    esearch_query = ""    
-   
+    esearch_query = ""
+
     # check if query terms are provided
     query_terms = " OR ".join([f'"{x}"' for x in query_terms])
     esearch_query += f"({query_terms})"
-    
+
     # add date range, if provided in the config
     min_date = config.get("configurable", {}).get("min_date")
     max_date = config.get("configurable", {}).get("max_date")
     if min_date and max_date:
         date_range = f"{min_date}:{max_date}[PDAT]"
         esearch_query += f" AND ({date_range})"
-    
+
     # add organism
     ## override organisms, if provided in the config
     if config.get("configurable", {}).get("organisms"):
@@ -67,7 +78,7 @@ def esearch_scrna(
         esearch_query += f" AND ({organisms})"
 
     # other filters
-    #esearch_query += ' AND "transcriptomic single cell"[Source]'
+    # esearch_query += ' AND "transcriptomic single cell"[Source]'
     esearch_query += ' AND "public"[Access]'
     esearch_query += ' AND "has data"[Properties]'
     esearch_query += ' AND "library layout paired"[Filter]'
@@ -83,21 +94,24 @@ def esearch_scrna(
     # use database to filter existing?
     filter_existing = config.get("configurable", {}).get("use_database", False)
 
-    # return entrez IDs 
-    #target_entrez_ids = ["22334366", "22138327", "21929846"];
-    #return esearch_batch(esearch_query, database, max_ids=3, target_entrez_ids=target_entrez_ids, verbose=True);
-    return esearch_batch(esearch_query, database, max_ids=max_ids, filter_existing=filter_existing)
+    # return entrez IDs
+    # target_entrez_ids = ["22334366", "22138327", "21929846"];
+    # return esearch_batch(esearch_query, database, max_ids=3, target_entrez_ids=target_entrez_ids, verbose=True);
+    return esearch_batch(
+        esearch_query, database, max_ids=max_ids, filter_existing=filter_existing
+    )
+
 
 def esearch_batch(
-    esearch_query: str, 
-    database: str, 
-    max_ids: Optional[int]=None,
-    verbose: bool=False, 
-    filter_existing: bool=False,
-    max_retries: int=3, 
-    base_delay: float=3.0,
-    target_entrez_ids: Optional[List[str]]=None
-    ) -> List[str]:
+    esearch_query: str,
+    database: str,
+    max_ids: Optional[int] = None,
+    verbose: bool = False,
+    filter_existing: bool = False,
+    max_retries: int = 3,
+    base_delay: float = 3.0,
+    target_entrez_ids: Optional[List[str]] = None,
+) -> List[str]:
     """
     Search for Entrez IDs using the Entrez.esearch function.
     Args:
@@ -116,7 +130,9 @@ def esearch_batch(
     existing_ids = set()
     if filter_existing:
         with db_connect() as conn:
-            existing_ids = {str(x) for x in db_get_entrez_ids(conn=conn, database=database)}
+            existing_ids = {
+                str(x) for x in db_get_entrez_ids(conn=conn, database=database)
+            }
     # search for novel Entrez IDs
     ids = []
     retstart = 0
@@ -127,38 +143,54 @@ def esearch_batch(
             try:
                 # search for Entrez IDs
                 search_handle = Entrez.esearch(
-                    db=database, 
-                    term=esearch_query, 
-                    retstart=retstart, 
+                    db=database,
+                    term=esearch_query,
+                    retstart=retstart,
                     retmax=retmax,
-                    sort='pub+date'
+                    sort="pub+date",
                 )
                 search_results = Entrez.read(search_handle)
                 search_handle.close()
                 if verbose:
-                    print(f'processed {retstart} of {search_results["Count"]} records', file=sys.stderr);
+                    print(
+                        f"processed {retstart} of {search_results['Count']} records",
+                        file=sys.stderr,
+                    )
                 # filter entrez ids
-                if target_entrez_ids:   
-                    ids.extend([x for x in search_results['IdList'] if x in target_entrez_ids])
+                if target_entrez_ids:
+                    ids.extend(
+                        [x for x in search_results["IdList"] if x in target_entrez_ids]
+                    )
                 else:
-                    ids.extend([x for x in search_results['IdList'] if x not in existing_ids])
+                    ids.extend(
+                        [x for x in search_results["IdList"] if x not in existing_ids]
+                    )
                 # update retstart
                 retstart += retmax
                 time.sleep(0.34)
                 break
             except HTTPError as e:
                 if e.code == 429 and attempt < max_retries - 1:
-                    wait_time = base_delay * 2 ** attempt
+                    wait_time = base_delay * 2**attempt
                     if verbose:
-                        print(f"Got HTTP 429; retrying in {wait_time} s...", file=sys.stderr)
+                        print(
+                            f"Got HTTP 429; retrying in {wait_time} s...",
+                            file=sys.stderr,
+                        )
                     time.sleep(wait_time)
                 else:
                     if verbose:
-                        print(f"Error searching {database} with query: {esearch_query}: {str(e)}", file=sys.stderr)
+                        print(
+                            f"Error searching {database} with query: {esearch_query}: {str(e)}",
+                            file=sys.stderr,
+                        )
                     return list(set(ids))
             except Exception as e:
                 if verbose:
-                    print(f"Error searching {database} with query: {esearch_query}: {str(e)}", file=sys.stderr)
+                    print(
+                        f"Error searching {database} with query: {esearch_query}: {str(e)}",
+                        file=sys.stderr,
+                    )
                 return list(set(ids))
         else:
             break
@@ -166,7 +198,7 @@ def esearch_batch(
         if max_ids and len(ids) >= max_ids:
             break
         # if retstart has hit total records in esearch query, break
-        if retstart >= int(search_results['Count']):
+        if retstart >= int(search_results["Count"]):
             break
 
     # return max_ids of the obtained unique ids
@@ -177,13 +209,14 @@ def esearch_batch(
         print(f"No. of IDs found: {len(ids)}", file=sys.stderr)
     return ids
 
-@tool 
+
+@tool
 def esearch(
     esearch_query: Annotated[str, "Entrez query string."],
     database: Annotated[str, "Database name (e.g., sra, gds, or pubmed)"],
     config: RunnableConfig,
-    verbose: Annotated[bool, "Print progress to stderr"]=False,
-    )-> Annotated[str, "Entrez IDs of database records"]:
+    verbose: Annotated[bool, "Print progress to stderr"] = False,
+) -> Annotated[str, "Entrez IDs of database records"]:
     """
     Run an Entrez search query and return the Entrez IDs of the results.
     Example query for single cell RNA-seq:
@@ -199,7 +232,19 @@ def esearch(
     # check input
     if esearch_query == "":
         return "Please provide a valid query."
-    for x in ["SRR", "ERR", "GSE", "GSM", "GDS", "ERX", "DRR", "PRJ", "SAM", "SRP", "SRX"]:
+    for x in [
+        "SRR",
+        "ERR",
+        "GSE",
+        "GSM",
+        "GDS",
+        "ERX",
+        "DRR",
+        "PRJ",
+        "SAM",
+        "SRP",
+        "SRX",
+    ]:
         if esearch_query == x:
             return f"Invalid query: {esearch_query}"
 
@@ -214,18 +259,21 @@ def esearch(
         for attempt in range(max_retries):
             set_entrez_access()
             try:
-                search_handle = Entrez.esearch(db=database, term=esearch_query, retstart=retstart, retmax=retmax)
+                search_handle = Entrez.esearch(
+                    db=database, term=esearch_query, retstart=retstart, retmax=retmax
+                )
                 search_results = Entrez.read(search_handle)
                 search_handle.close()
-                for k in ["RetMax","RetStart"]:
-                    if k in search_results: del search_results[k]
+                for k in ["RetMax", "RetStart"]:
+                    if k in search_results:
+                        del search_results[k]
                 records.append(str(search_results))
                 retstart += retmax
                 time.sleep(0.5)
                 break
             except HTTPError as e:
                 if e.code == 429 and attempt < max_retries - 1:
-                    time.sleep(base_delay * 2 ** attempt)
+                    time.sleep(base_delay * 2**attempt)
                 else:
                     msg = f"HTTP Error searching {database} with query {esearch_query}: {e}"
                     if verbose:
@@ -240,41 +288,46 @@ def esearch(
             break
         if max_records and len(records) >= max_records:
             break
-        if search_results is None or retstart >= int(search_results['Count']):
+        if search_results is None or retstart >= int(search_results["Count"]):
             break
-        
+
     # return records
     if len(records) == 0:
         return f"No records found for query: {esearch_query}"
     if max_records:
-        records = records[:max_records] 
+        records = records[:max_records]
     return ", ".join([str(x) for x in records])
 
 
 if __name__ == "__main__":
     # setup
     from dotenv import load_dotenv
+
     load_dotenv(override=True)
     Entrez.email = os.getenv("EMAIL")
 
-    # query for scRNA-seq 
-    config = {"configurable": {
-        "min_date": "2016/01/01",
-        "max_date": "2025/12/31",
-    }}
+    # query for scRNA-seq
+    config = {
+        "configurable": {
+            "min_date": "2016/01/01",
+            "max_date": "2025/12/31",
+        }
+    }
     input = {
-        "query_terms" : ["10X Genomics", "single cell RNA sequencing", "single cell RNA-seq"],
-        "organism" : ["human", "mouse"],
-        "max_ids" : 10,
-        "database" : "sra"
+        "query_terms": [
+            "10X Genomics",
+            "single cell RNA sequencing",
+            "single cell RNA-seq",
+        ],
+        "organism": ["human", "mouse"],
+        "max_ids": 10,
+        "database": "sra",
     }
     print(esearch_scrna.invoke(input, config=config))
 
     # esearch accession
-    #input = {"esearch_query" : "GSE51372", "database" : "sra"}
-    #input = {"esearch_query" : "GSE121737", "database" : "gds"}
-    #input = {"esearch_query" : "35447314", "database" : "sra"}
-    #input = {"esearch_query" : "35447314", "database" : "gds"}
-    #print(esearch.invoke(input))
-
-
+    # input = {"esearch_query" : "GSE51372", "database" : "sra"}
+    # input = {"esearch_query" : "GSE121737", "database" : "gds"}
+    # input = {"esearch_query" : "35447314", "database" : "sra"}
+    # input = {"esearch_query" : "35447314", "database" : "gds"}
+    # print(esearch.invoke(input))

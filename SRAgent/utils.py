@@ -1,13 +1,5 @@
-# import
-## batteries
-import os
-import sys
-from typing import List, Dict, Any
-## 3rd party
-import pandas as pd
-
 # functions
-def save_graph_image(graph, outfile: str="graph_image.png") -> None:
+def save_graph_image(graph, outfile: str = "graph_image.png") -> None:
     """
     Save the langgraph graph as a PNG image.
     Args:
@@ -18,8 +10,9 @@ def save_graph_image(graph, outfile: str="graph_image.png") -> None:
         png_data = graph.get_graph().draw_mermaid_png()
         file.write(png_data)
 
+
 # main
 if __name__ == "__main__":
     from dotenv import load_dotenv
-    load_dotenv(override=True)
 
+    load_dotenv(override=True)

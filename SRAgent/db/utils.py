@@ -1,27 +1,26 @@
-
 # import
 ## batteries
 import os
 import sys
-import warnings
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Tuple, Optional
+
 ## 3rd party
 import psycopg2
 import pandas as pd
-from pypika import Query, Table, Field, Column, Criterion
-from psycopg2.extras import execute_values
+from pypika import Query, Table
 from psycopg2.extensions import connection
+
 
 # functions
 def get_unique_columns(table: str, conn: connection) -> List[str]:
     """
     Get all unique constraint columns for a table from the database schema.
     Prioritizes composite unique constraints over primary keys.
-    
+
     Args:
         table: Name of the table
         conn: Database connection
-        
+
     Returns:
         List of column names that form the most appropriate unique constraint
     """
@@ -35,21 +34,22 @@ def get_unique_columns(table: str, conn: connection) -> List[str]:
     GROUP BY c.conname, c.contype
     ORDER BY c.contype DESC;  -- 'u'nique before 'p'rimary key
     """
-    
+
     with conn.cursor() as cur:
         cur.execute(query, (table,))
         constraints = cur.fetchall()
-        
+
     if not constraints:
         raise ValueError(f"No unique constraints found in table {table}")
-    
+
     # Prefer composite unique constraints over single-column primary keys
     for constraint_type, columns in constraints:
-        if len(columns) > 1 or constraint_type == 'u':
+        if len(columns) > 1 or constraint_type == "u":
             return columns
-    
+
     # Fall back to primary key if no other suitable constraint found
     return constraints[0][1]
+
 
 def db_list_tables(conn: connection) -> List[str]:
     """
@@ -59,14 +59,17 @@ def db_list_tables(conn: connection) -> List[str]:
     Returns:
         List of table names in the public schema.
     """
-    tables = Table('tables', schema='information_schema')
-    query = Query.from_(tables).select('table_name').where(tables.table_schema == 'public')
+    tables = Table("tables", schema="information_schema")
+    query = (
+        Query.from_(tables).select("table_name").where(tables.table_schema == "public")
+    )
     with conn.cursor() as cur:
         cur.execute(str(query))
         ret = cur.fetchall()
         if isinstance(ret, list):
             ret = [x[0] for x in ret]
         return ret
+
 
 def db_get_table(table_name: str, conn: connection) -> pd.DataFrame:
     """
@@ -80,6 +83,7 @@ def db_get_table(table_name: str, conn: connection) -> pd.DataFrame:
     query = f"SELECT * FROM {table_name}"
     return pd.read_sql(query, conn)
 
+
 def db_glimpse_tables(conn: connection) -> None:
     """
     Print the first 5 rows of each table in the database.
@@ -89,8 +93,9 @@ def db_glimpse_tables(conn: connection) -> None:
     for table in db_list_tables(conn):
         print(f"#-- Table: {table} --#")
         df = pd.read_sql(f"SELECT * FROM {table} LIMIT 5", conn)
-        df.to_csv(sys.stdout, sep='\t', index=False)
+        df.to_csv(sys.stdout, sep="\t", index=False)
         print()
+
 
 def execute_query(stmt, conn: connection) -> Optional[List[Tuple]]:
     """
@@ -116,18 +121,20 @@ def execute_query(stmt, conn: connection) -> Optional[List[Tuple]]:
     except psycopg2.ProgrammingError as e:
         print(f"SQL Programming Error: {e}")
         return None
-    except psycopg2.Error as e:  
+    except psycopg2.Error as e:
         print(f"Database Error: {e}")
-        conn.rollback() 
+        conn.rollback()
         raise
-    except Exception as e: 
+    except Exception as e:
         print(f"Unexpected Error: {e}")
         raise
+
 
 # main
 if __name__ == "__main__":
     from dotenv import load_dotenv
     from SRAgent.db.connect import db_connect
+
     load_dotenv()
 
     os.environ["DYNACONF"] = "test"

@@ -1,14 +1,10 @@
 # import
-from datetime import datetime, timedelta
-from typing import List, Dict, Literal, Any
-import xml.etree.ElementTree as ET
-## 3rd party
-from Bio import Entrez
+from datetime import datetime
 
 
-def construct_query(start_date: str, end_date: str, 
-                    search_terms: list = None,
-                    organism: str="human") -> str:
+def construct_query(
+    start_date: str, end_date: str, search_terms: list = None, organism: str = "human"
+) -> str:
     """
     Create an Entrez query string with date range and optional search term.
     Args:
@@ -24,16 +20,16 @@ def construct_query(start_date: str, end_date: str,
 
     if search_terms is None:
         search_terms = [
-            'single cell RNA sequencing', 
-            'single cell RNA-seq', 
-            'single cell transcriptomics'
+            "single cell RNA sequencing",
+            "single cell RNA-seq",
+            "single cell transcriptomics",
         ]
-    
+
     if search_terms:
         # add quotes to search terms
         search_terms = [f'"{term}"' for term in search_terms]
-        search_terms = ' OR '.join(search_terms)
-        query = f'({search_terms}) AND {date_range}'
+        search_terms = " OR ".join(search_terms)
+        query = f"({search_terms}) AND {date_range}"
     else:
         query = date_range
     query += f' AND "{organism}"[Organism]'

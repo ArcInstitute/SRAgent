@@ -85,7 +85,7 @@ def create_get_entrez_ids_node() -> Callable:
                 "    - Entrez IDs may be referred to as 'database IDs' or 'accession numbers'.",
                 " - Extract the database name (e.g., GEO, SRA, etc.)",
                 "   - If you cannot find the database name, do not provide any database name.",
-                "   - GEO should be formatted as 'gds'"
+                "   - GEO should be formatted as 'gds'",
                 "   - SRA should be formatted as 'sra'",
                 "#-- START OF MESSAGE --#",
                 message,
@@ -161,7 +161,7 @@ def create_get_entrez_ids_node() -> Callable:
 
 def continue_to_srx_info(
     state: GraphState, config: RunnableConfig
-) -> List[Dict[str, Any]]:
+) -> List[Send]:
     """
     Parallel invoke of the srx_info graph
     """

@@ -277,7 +277,7 @@ def create_get_metadata_node() -> Callable:
         prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", prompt),
-                ("system", "\nHere are the last few messages:"),
+                ("human", "\nHere are the last few messages:"),
                 MessagesPlaceholder(variable_name="history"),
             ]
         )
@@ -301,12 +301,7 @@ def create_get_metadata_node() -> Callable:
                         f"OpenAI refused to generate metadata (attempt {attempt + 1}), retrying...",
                         file=sys.stderr,
                     )
-                    prompt.append(
-                        (
-                            "system",
-                            "If you cannot determine certain fields with confidence, use 'unsure' or 'other' as appropriate.",
-                        )
-                    )
+                    prompt.append(HumanMessage(content="If you cannot determine certain fields with confidence, use 'unsure' or 'other' as appropriate."))
                     continue
                 else:
                     # For final attempt or other errors, use default values

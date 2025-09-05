@@ -171,9 +171,9 @@ def create_router_node() -> Callable:
                         ]
                     ),
                 ),
-                ("system", "\nHere are the last few messages:"),
+                ("human", "\nHere are the last few messages:"),
                 MessagesPlaceholder(variable_name="history"),
-                ("system", "\nHere are the extracted SRA accessions:\n" + accesions),
+                ("human", "\nHere are the extracted SRA accessions:\n" + accesions),
             ]
         )
         formatted_prompt = prompt.format_messages(history=state["messages"][-4:])

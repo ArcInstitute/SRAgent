@@ -4,7 +4,7 @@ import sys
 import asyncio
 from functools import wraps
 from importlib import resources
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Set
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from dynaconf import Dynaconf
@@ -245,9 +245,21 @@ def set_model(
             f"Service tier 'flex' only works with o3 and o4-mini models, not {model_name} (agent: {agent_name})"
         )
 
+    # Agents that use structured outputs must not enable Claude "thinking" mode
+    STRUCTURED_OUTPUT_AGENTS: Set[str] = {
+        "convert_router",
+        "metadata_router",
+        "accessions",
+        "get_entrez_ids",
+        "entrez_convert",
+        "metadata",
+    }
+
     # Check model provider and initialize appropriate model
     if model_name.startswith("claude"):  # e.g.,  "claude-3-7-sonnet-20250219"
-        if reasoning_effort == "low":
+        if agent_name in STRUCTURED_OUTPUT_AGENTS:
+            think_tokens = 0
+        elif reasoning_effort == "low":
             think_tokens = 1024
         elif reasoning_effort == "medium":
             think_tokens = 1024 * 2

@@ -1,6 +1,7 @@
 # import
 ## batteries
 import asyncio
+import sys
 from typing import Annotated, Callable, Optional
 
 ## 3rd party
@@ -98,6 +99,12 @@ def create_bigquery_agent(model_name: Optional[str] = None) -> Callable:
                     "Enable one of: (1) 'gcloud auth application-default login' and set 'GCP_PROJECT_ID', "
                     "or (2) set 'GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json' and 'GCP_PROJECT_ID'. "
                     "Without credentials, BigQuery tools cannot run."
+                )
+                print(
+                    "WARNING: BigQuery not used — missing Google Cloud credentials.\n"
+                    "- Run: gcloud auth application-default login (and set GCP_PROJECT_ID), or\n"
+                    "- Set: GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json and GCP_PROJECT_ID",
+                    file=sys.stderr,
                 )
                 return {
                     "messages": [AIMessage(content=guidance, name="bigquery_agent")]

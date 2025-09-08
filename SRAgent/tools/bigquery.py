@@ -1,6 +1,7 @@
 # import
 ## batteries
 from typing import Annotated, List
+import sys
 
 ## 3rd party
 from google.cloud import bigquery
@@ -17,6 +18,19 @@ MISSING_CLIENT_MSG = (
     "or (2) set 'GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json' and 'GCP_PROJECT_ID'. "
     "Without credentials, BigQuery tools cannot run."
 )
+
+_WARNED_NO_CLIENT = False
+
+def _warn_no_client_once():
+    global _WARNED_NO_CLIENT
+    if not _WARNED_NO_CLIENT:
+        print(
+            "WARNING: BigQuery not used — missing Google Cloud credentials.\n"
+            "- Run: gcloud auth application-default login (and set GCP_PROJECT_ID), or\n"
+            "- Set: GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json and GCP_PROJECT_ID",
+            file=sys.stderr,
+        )
+        _WARNED_NO_CLIENT = True
 
 
 # functions
@@ -36,6 +50,7 @@ def get_study_metadata(
     - experiments: Comma-separated list of associated experiment accessions (SRX)
     """
     if config is None or config.get("configurable", {}).get("client") is None:
+        _warn_no_client_once()
         return MISSING_CLIENT_MSG
     query = f"""
     WITH distinct_values AS (
@@ -81,6 +96,7 @@ def get_experiment_metadata(
     - acc: Comma-separated list of associated run accessions (SRR)
     """
     if config is None or config.get("configurable", {}).get("client") is None:
+        _warn_no_client_once()
         return MISSING_CLIENT_MSG
     query = f"""
     WITH distinct_values AS (
@@ -133,6 +149,7 @@ def get_run_metadata(
     - insertsize: Insert size (in base pairs)
     """
     if config is None or config.get("configurable", {}).get("client") is None:
+        _warn_no_client_once()
         return MISSING_CLIENT_MSG
     query = f"""
     SELECT 
@@ -167,6 +184,7 @@ def get_study_experiment_run(
     - run_accession: SRA or ENA run accession (SRR or ERR)
     """
     if config is None or config.get("configurable", {}).get("client") is None:
+        _warn_no_client_once()
         return MISSING_CLIENT_MSG
     # get study accessions
     study_acc = [x for x in accessions if x.startswith("SRP") or x.startswith("PRJNA")]

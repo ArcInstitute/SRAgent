@@ -1,6 +1,7 @@
 # import
 ## batteries
 from typing import Annotated, List
+import sys
 
 ## 3rd party
 from google.cloud import bigquery
@@ -9,6 +10,27 @@ from langchain_core.runnables import RunnableConfig
 
 ## package
 from SRAgent.tools.utils import to_json, join_accs
+
+
+MISSING_CLIENT_MSG = (
+    "BigQuery requires Google Cloud credentials. "
+    "Enable one of: (1) 'gcloud auth application-default login' and set 'GCP_PROJECT_ID', "
+    "or (2) set 'GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json' and 'GCP_PROJECT_ID'. "
+    "Without credentials, BigQuery tools cannot run."
+)
+
+_WARNED_NO_CLIENT = False
+
+def _warn_no_client_once():
+    global _WARNED_NO_CLIENT
+    if not _WARNED_NO_CLIENT:
+        print(
+            "WARNING: BigQuery not used — missing Google Cloud credentials.\n"
+            "- Run: gcloud auth application-default login (and set GCP_PROJECT_ID), or\n"
+            "- Set: GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json and GCP_PROJECT_ID",
+            file=sys.stderr,
+        )
+        _WARNED_NO_CLIENT = True
 
 
 # functions
@@ -27,8 +49,9 @@ def get_study_metadata(
     - bioproject: BioProject accession (parent of study)
     - experiments: Comma-separated list of associated experiment accessions (SRX)
     """
-    if config is None or config["configurable"]["client"] is None:
-        return "No BigQuery client provided."
+    if config is None or config.get("configurable", {}).get("client") is None:
+        _warn_no_client_once()
+        return MISSING_CLIENT_MSG
     query = f"""
     WITH distinct_values AS (
         SELECT DISTINCT
@@ -72,8 +95,9 @@ def get_experiment_metadata(
     - instrument: Sequencing instrument (e.g., HiSeq, NovaSeq)
     - acc: Comma-separated list of associated run accessions (SRR)
     """
-    if config is None or config["configurable"]["client"] is None:
-        return "No BigQuery client provided."
+    if config is None or config.get("configurable", {}).get("client") is None:
+        _warn_no_client_once()
+        return MISSING_CLIENT_MSG
     query = f"""
     WITH distinct_values AS (
         SELECT DISTINCT
@@ -124,8 +148,9 @@ def get_run_metadata(
     - avgspotlen: Average spot length (in base pairs)
     - insertsize: Insert size (in base pairs)
     """
-    if config is None or config["configurable"]["client"] is None:
-        return "No BigQuery client provided."
+    if config is None or config.get("configurable", {}).get("client") is None:
+        _warn_no_client_once()
+        return MISSING_CLIENT_MSG
     query = f"""
     SELECT 
         m.acc,
@@ -158,8 +183,9 @@ def get_study_experiment_run(
     - experiment_accession: SRA or ENA experiment accession (SRX or ERX)
     - run_accession: SRA or ENA run accession (SRR or ERR)
     """
-    if config is None or config["configurable"]["client"] is None:
-        return "No BigQuery client provided."
+    if config is None or config.get("configurable", {}).get("client") is None:
+        _warn_no_client_once()
+        return MISSING_CLIENT_MSG
     # get study accessions
     study_acc = [x for x in accessions if x.startswith("SRP") or x.startswith("PRJNA")]
     exp_acc = [x for x in accessions if x.startswith("SRX") or x.startswith("ERX")]
@@ -196,6 +222,7 @@ def get_study_experiment_run(
 
 
 if __name__ == "__main__":
+    # python -m SRAgent.tools.bigquery
     # setup
     from dotenv import load_dotenv
 

@@ -32,8 +32,8 @@ def create_bigquery_agent(model_name: Optional[str] = None) -> Callable:
     # create model
     model = set_model(model_name=model_name, agent_name="bigquery")
 
-    # init client
-    bq_client = bigquery.Client()
+    # Defer BigQuery client creation so missing ADC doesn't crash workflows
+    bq_client = None
 
     # set tools
     tools = [
@@ -87,8 +87,24 @@ def create_bigquery_agent(model_name: Optional[str] = None) -> Callable:
         Invoke the BigQuery agent with a message.
         The BigQuery agent will search the SRA database with BigQuery.
         """
-        # Create config with client if not present
-        config = {"configurable": {"client": bq_client}}
+        # Ensure BigQuery client; if unavailable, return helpful guidance
+        client = bq_client
+        if client is None:
+            try:
+                client = bigquery.Client()
+            except Exception:
+                guidance = (
+                    "BigQuery requires Google Cloud credentials. "
+                    "Enable one of: (1) 'gcloud auth application-default login' and set 'GCP_PROJECT_ID', "
+                    "or (2) set 'GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json' and 'GCP_PROJECT_ID'. "
+                    "Without credentials, BigQuery tools cannot run."
+                )
+                return {
+                    "messages": [AIMessage(content=guidance, name="bigquery_agent")]
+                }
+
+        # Create config with client
+        config = {"configurable": {"client": client}}
 
         # Invoke the agent with the message
         result = await agent.ainvoke(
@@ -104,7 +120,7 @@ def create_bigquery_agent(model_name: Optional[str] = None) -> Callable:
 
 
 if __name__ == "__main__":
-    # setup
+    # python -m SRAgent.agents.bigquery
     from dotenv import load_dotenv
 
     load_dotenv()

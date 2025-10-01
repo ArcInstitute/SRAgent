@@ -41,6 +41,10 @@ jobs:
             **/uv.lock
             **/pyproject.toml
 
+      - name: Prepare cache directory
+        run: |
+          mkdir -p ~/.cache/SRAgent
+
       - name: Show tool versions
         run: |
           python --version

@@ -1,4 +1,4 @@
-name: Python Tests
+name: Unit tests
 
 on:
   push:
@@ -6,27 +6,56 @@ on:
   pull_request:
     branches: [ main, dev ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  tests:
+    name: pytest (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     strategy:
       fail-fast: true
       matrix:
-        python-version: ['3.11', '3.12']
+        os: [ ubuntu-latest ]
+        python-version: [ "3.11", "3.12" ]
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev]"
-    - name: Run tests with pytest
-      run: |
-        pytest tests/
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          # Cache based on either lockfile or project config
+          cache-dependency-glob: |
+            **/uv.lock
+            **/pyproject.toml
+
+      - name: Prepare cache directory
+        run: |
+          mkdir -p ~/.cache/SRAgent
+
+      - name: Show tool versions
+        run: |
+          python --version
+          uv --version
+
+      - name: Install dependencies (dev)
+        run: |
+          uv sync --extra dev
+
+      - name: Run unit tests
+        env:
+          DYNACONF: test
+        run: |
+          uv run pytest tests/

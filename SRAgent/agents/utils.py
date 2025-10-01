@@ -326,5 +326,5 @@ if __name__ == "__main__":
     print(settings)
 
     # set model
-    model = set_model(model_name="claude-sonnet-4-latest", agent_name="default")
+    model = set_model(model_name="claude-sonnet-4-5", agent_name="default")
     print(model)

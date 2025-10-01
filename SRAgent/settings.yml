@@ -183,7 +183,7 @@ prod:
 claude:
   db_name: "sragent-test"
   models:
-    default: "claude-sonnet-4-0"
+    default: "claude-sonnet-4-5"
   temperature:
     default: 0.1
   reasoning_effort:

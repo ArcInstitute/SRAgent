@@ -450,7 +450,7 @@ You can also customize the specific Claude model in settings.yml:
 ```yaml
 claude:
   models:
-    default: "claude-sonnet-4-0"  # Or any other Claude model version
+    default: "claude-sonnet-4-5"  # Or any other Claude model version
   temperature:
     default: 0.1
   reasoning_effort:

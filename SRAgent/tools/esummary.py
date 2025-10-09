@@ -1,8 +1,9 @@
 # import
 ## batteries
+from __future__ import annotations
 import os
 import time
-from typing import Annotated, List
+from typing import Annotated
 
 ## 3rd party
 from Bio import Entrez
@@ -15,7 +16,7 @@ from SRAgent.tools.utils import batch_ids, truncate_values, xml2json, set_entrez
 # functions
 @tool
 def esummary(
-    entrez_ids: Annotated[List[str], "List of Entrez IDs"],
+    entrez_ids: Annotated[list[str], "List of Entrez IDs"],
     database: Annotated[str, "Database name (e.g., sra, gds, or pubmed)"],
 ) -> Annotated[str, "eSummary results in XML format"]:
     """

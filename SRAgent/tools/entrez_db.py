@@ -1,8 +1,9 @@
 # import
 ## batteries
+from __future__ import annotations
 import os
 import time
-from typing import Annotated, List
+from typing import Annotated
 
 ## 3rd party
 from Bio import Entrez
@@ -14,8 +15,8 @@ from SRAgent.tools.utils import batch_ids
 
 @tool
 def which_entrez_databases(
-    entrez_ids: Annotated[List[str], "List of Entrez IDs"],
-    databases: Annotated[List[str], "Which NCBI databases to check"] = [
+    entrez_ids: Annotated[list[str], "List of Entrez IDs"],
+    databases: Annotated[list[str], "Which NCBI databases to check"] = [
         "sra",
         "gds",
         "pubmed",

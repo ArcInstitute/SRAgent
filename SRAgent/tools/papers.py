@@ -2,7 +2,6 @@
 ## batteries
 from __future__ import annotations
 import os
-import json
 from typing import Annotated
 
 ## 3rd party
@@ -28,11 +27,13 @@ def _get_core_info(doi: str, api_key: str | None = None) -> dict | None:
     """
     base_url = "https://api.core.ac.uk/v3"
 
+    # get api key from env var or numbered env vars
     if api_key is None:
         api_key = os.environ.get("CORE_API_KEY")
         if not api_key:
             return None
 
+    # request to core api
     headers = {"Authorization": f"Bearer {api_key}"}
     params = {"q": f"doi:{doi}", "limit": 1}
 
@@ -69,11 +70,18 @@ def _get_unpaywall_info(doi: str, email: str | None = None) -> dict | None:
     Returns:
         Dictionary with OA location info or None if not found/error
     """
+    # get email from env var or numbered env vars
     if email is None:
         email = os.environ.get("EMAIL")
         if not email:
-            return None
+            for i in range(11):
+                if os.getenv(f"EMAIL{i}"):
+                    email = os.getenv(f"EMAIL{i}")
+                    break
+    if not email:
+        return None
 
+    # get unpaywall info
     try:
         url = f"https://api.unpaywall.org/v2/{doi}?email={email}"
         response = requests.get(url, timeout=10)

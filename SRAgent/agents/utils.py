@@ -240,9 +240,9 @@ def set_model(
                 timeout = 180.0  # Default value
 
     # Validate service_tier for OpenAI models
-    if service_tier == "flex" and not re.search(r"^o[0-9]", model_name):
+    if service_tier == "flex" and not re.search(r"^(o[0-9]|^gpt-5)", model_name):
         raise ValueError(
-            f"Service tier 'flex' only works with o3 and o4-mini models, not {model_name} (agent: {agent_name})"
+            f"Service tier 'flex' only works with o3 and o4-mini, & gpt-5* models, not {model_name} (agent: {agent_name})"
         )
 
     # Agents that use structured outputs must not enable Claude "thinking" mode
@@ -277,7 +277,7 @@ def set_model(
             thinking = {"type": "disabled"}
             if temperature is None:
                 raise ValueError(
-                    f"Temperature is required for Claude models if reasoning_effort is not set"
+                    "Temperature is required for Claude models if reasoning_effort is not set"
                 )
         if not max_tokens:
             max_tokens = 1024
@@ -298,8 +298,8 @@ def set_model(
             service_tier=service_tier,
             timeout=timeout if service_tier == "flex" else None,
         )
-    elif re.search(r"^o[0-9]", model_name):
-        # o[0-9] models use reasoning_effort but not temperature
+    elif re.search(r"(^o[0-9]|^gpt-5)", model_name):
+        # o[0-9] and gpt-5 models use reasoning_effort but not temperature
         # Use FlexTierChatOpenAI for automatic fallback support
         model = FlexTierChatOpenAI(
             model_name=model_name,

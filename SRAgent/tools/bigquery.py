@@ -1,6 +1,7 @@
 # import
 ## batteries
-from typing import Annotated, List
+from __future__ import annotations
+from typing import Annotated
 import sys
 
 ## 3rd party
@@ -21,6 +22,7 @@ MISSING_CLIENT_MSG = (
 
 _WARNED_NO_CLIENT = False
 
+
 def _warn_no_client_once():
     global _WARNED_NO_CLIENT
     if not _WARNED_NO_CLIENT:
@@ -37,7 +39,7 @@ def _warn_no_client_once():
 @tool
 def get_study_metadata(
     study_accessions: Annotated[
-        List[str], "A list of SRA study accession numbers (SRP)"
+        list[str], "A list of SRA study accession numbers (SRP)"
     ],
     limit: Annotated[int, "The maximum number of records to return"] = 100,
     config: RunnableConfig = None,
@@ -77,7 +79,7 @@ def get_study_metadata(
 @tool
 def get_experiment_metadata(
     experiment_accessions: Annotated[
-        List[str], "A list of SRA experiment accession numbers (SRX)"
+        list[str], "A list of SRA experiment accession numbers (SRX)"
     ],
     limit: Annotated[int, "The maximum number of records to return"] = 100,
     config: RunnableConfig = None,
@@ -132,7 +134,7 @@ def get_experiment_metadata(
 
 @tool
 def get_run_metadata(
-    run_accessions: Annotated[List[str], "A list of SRA run accession numbers (SRR)"],
+    run_accessions: Annotated[list[str], "A list of SRA run accession numbers (SRR)"],
     limit: Annotated[int, "The maximum number of records to return"] = 100,
     config: RunnableConfig = None,
 ) -> Annotated[str, "JSON string of SRA run metadata"]:
@@ -171,7 +173,7 @@ def get_run_metadata(
 
 @tool
 def get_study_experiment_run(
-    accessions: Annotated[List[str], "A list of SRA study accession numbers"],
+    accessions: Annotated[list[str], "A list of SRA study accession numbers"],
     limit: Annotated[int, "The maximum number of records to return"] = 100,
     config: RunnableConfig = None,
 ) -> Annotated[str, "JSON string of SRA experiment metadata"]:

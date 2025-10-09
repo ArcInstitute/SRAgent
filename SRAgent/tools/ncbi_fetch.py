@@ -1,8 +1,9 @@
+from __future__ import annotations
 import re
 import time
 import requests
 from bs4 import BeautifulSoup
-from typing import Annotated, List
+from typing import Annotated
 
 from langchain_core.tools import tool
 
@@ -67,7 +68,7 @@ def _fetch_ncbi_record(
 @tool
 def fetch_ncbi_record(
     terms: Annotated[
-        List[str], "A list of Entrez IDs or SRA accessions to fetch data for."
+        list[str], "A list of Entrez IDs or SRA accessions to fetch data for."
     ],
     database: Annotated[
         str, "The NCBI database to fetch data from (sra or gds)."
@@ -113,7 +114,7 @@ def _fetch_pubmed_record(
 @tool
 def fetch_pubmed_record(
     terms: Annotated[
-        List[str], "A list of Entrez IDs or PubMed IDs to fetch data for."
+        list[str], "A list of Entrez IDs or PubMed IDs to fetch data for."
     ],
 ) -> str:
     """Fetches the NCBI PubMed page for a given PubMed ID."""
@@ -176,7 +177,7 @@ def _fetch_geo_record(
 
 @tool
 def fetch_geo_record(
-    GEO_accessions: Annotated[List[str], "A list of GEO accessions to fetch data for."],
+    GEO_accessions: Annotated[list[str], "A list of GEO accessions to fetch data for."],
 ) -> str:
     """Fetches the NCBI GEO page for a given GEO accession number."""
     data = []
@@ -253,7 +254,7 @@ def _fetch_biosample_record(
 
 @tool
 def fetch_biosample_record(
-    biosample_ids: Annotated[List[str], "A list of Biosample IDs"],
+    biosample_ids: Annotated[list[str], "A list of Biosample IDs"],
 ) -> str:
     """Fetches the NCBI Biosample page for a list of Biosample IDs.
     Example Biosample IDs: SAMN38009944, SAMN38009945, SAMN38009946"""
@@ -319,7 +320,7 @@ def _fetch_bioproject_record(
 
 @tool
 def fetch_bioproject_record(
-    bioproject_ids: Annotated[List[str], "A list of BioProject IDs"],
+    bioproject_ids: Annotated[list[str], "A list of BioProject IDs"],
 ) -> str:
     """Fetches the NCBI BioProject page for a list of BioProject IDs.
     Example BioProject IDs: PRJNA218110 and PRJNA1026523"""

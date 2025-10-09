@@ -1,35 +1,38 @@
 #!/usr/bin/env python
 # import
 ## batteries
+from __future__ import annotations
 import os
 import sys
 import argparse
 from datetime import datetime
-from typing import List, Dict, Literal, Any, Optional
+from typing import Any
 import concurrent.futures
+
 ## 3rd party
 from dotenv import load_dotenv
 import pandas as pd
 from psycopg2.extensions import connection
-from pypika import Query, Table, Criterion, functions as fn
+
 ## package
 from SRAgent.db.connect import db_connect
 from SRAgent.db.upsert import db_upsert
-from SRAgent.db.utils import db_list_tables, db_glimpse_tables, execute_query
+from SRAgent.db.utils import db_list_tables, db_glimpse_tables
 from SRAgent.db.get import db_find_srx
 from SRAgent.db.create import create_table, create_table_router
 
-def parse_cli_args():
 
+def parse_cli_args():
     # get current date in YYYY-MM-DD format
-    today = datetime.today().strftime('%Y-%m-%d')
+    today = datetime.today().strftime("%Y-%m-%d")
 
     # argparse
-    class CustomFormatter(argparse.ArgumentDefaultsHelpFormatter,
-                          argparse.RawDescriptionHelpFormatter):
+    class CustomFormatter(
+        argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter
+    ):
         pass
 
-    desc = 'Database tools'
+    desc = "Database tools"
     epi = """DESCRIPTION:
 # list all tables
 db-tools.py --list
@@ -65,78 +68,109 @@ db-tools.py --schema
         description=desc, epilog=epi, formatter_class=CustomFormatter
     )
     parser.add_argument(
-        '--dump', action="store_true", default=False, 
-        help='Dump all tables to CSV files'
+        "--dump",
+        action="store_true",
+        default=False,
+        help="Dump all tables to CSV files",
     )
     parser.add_argument(
-        '--dump-dir', type=str, default=os.path.join("db_bkup", today), 
-        help='Directory to dump CSV files'
+        "--dump-dir",
+        type=str,
+        default=os.path.join("db_bkup", today),
+        help="Directory to dump CSV files",
     )
     parser.add_argument(
-        '--parallel', type=int, default=8,
-        help='Number of parallel processes for dumping tables'
+        "--parallel",
+        type=int,
+        default=8,
+        help="Number of parallel processes for dumping tables",
     )
     parser.add_argument(
-        '--chunk-size', type=int, default=10000,
-        help='Chunk size for reading large tables (rows per chunk)'
+        "--chunk-size",
+        type=int,
+        default=10000,
+        help="Chunk size for reading large tables (rows per chunk)",
     )
     parser.add_argument(
-        '--list', action="store_true", default=False,
-        help='List all tables in database'
+        "--list", action="store_true", default=False, help="List all tables in database"
     )
     parser.add_argument(
-        '--glimpse', action="store_true", default=False,
-        help='Glimpse all tables in database'
+        "--glimpse",
+        action="store_true",
+        default=False,
+        help="Glimpse all tables in database",
     )
     parser.add_argument(
-        '--count-records', action="store_true", default=False,
-        help='Count records in all tables in database'
+        "--count-records",
+        action="store_true",
+        default=False,
+        help="Count records in all tables in database",
     )
     parser.add_argument(
-        '--schema', action="store_true", default=False,
-        help='Display the schema (column definitions) for all tables'
+        "--schema",
+        action="store_true",
+        default=False,
+        help="Display the schema (column definitions) for all tables",
     )
+    parser.add_argument("--view", type=str, default=None, help="View table in database")
     parser.add_argument(
-        '--view', type=str, default=None,
-        help='View table in database'
-    )
-    parser.add_argument(
-        '--create', type=str, default=None, nargs='+',
+        "--create",
+        type=str,
+        default=None,
+        nargs="+",
         choices=list(create_table_router().keys()) + ["ALL"],
-        help='Create >=1 table in the database'
+        help="Create >=1 table in the database",
     )
     parser.add_argument(
-        '--find-srx', type=str, default=None, nargs='+', 
-        help='Find SRX accessions in the database'
+        "--find-srx",
+        type=str,
+        default=None,
+        nargs="+",
+        help="Find SRX accessions in the database",
     )
     parser.add_argument(
-        '--upsert-csv', type=str, default=None, 
-        help='CSV file to upsert into database'
+        "--upsert-csv", type=str, default=None, help="CSV file to upsert into database"
     )
     parser.add_argument(
-        '--upsert-target', type=str, default=None, 
-        help='Table to upsert into database'
+        "--upsert-target", type=str, default=None, help="Table to upsert into database"
     )
     parser.add_argument(
-        '--drop', type=str, default=None, nargs='+', 
-        help='>=1 table to delete from database.'
+        "--drop",
+        type=str,
+        default=None,
+        nargs="+",
+        help=">=1 table to delete from database.",
     )
     parser.add_argument(
-        '--delete-srx', type=str, default=None, nargs='+', 
-        help='>=1 SRX accession to delete from the entire database, except the Eval table.'
+        "--delete-srx",
+        type=str,
+        default=None,
+        nargs="+",
+        help=">=1 SRX accession to delete from the entire database, except the Eval table.",
     )
     parser.add_argument(
-        '--delete-srx-screcounter', type=str, default=None, nargs='+', 
-        help='>=1 SRX accession to delete from the scRecounter tables in the database.'
+        "--delete-srx-screcounter",
+        type=str,
+        default=None,
+        nargs="+",
+        help=">=1 SRX accession to delete from the scRecounter tables in the database.",
     )
     parser.add_argument(
-        '--tenant', type=str, default=os.getenv("DYNACONF"), 
-        choices = ["test", "prod"],
-        help='SRAgent database tenant to use. Defaults to DYNACONF env variable'
+        "--tenant",
+        type=str,
+        default=os.getenv("DYNACONF"),
+        choices=["test", "prod"],
+        help="SRAgent database tenant to use. Defaults to DYNACONF env variable",
     )
     return parser.parse_args()
 
-def dump_table(table: str, dump_dir: str, conn_params: Dict[str, Any], chunk_size: Optional[int] = None) -> str:
+
+def dump_table(
+    table: str,
+    dump_dir: str,
+    conn_params: dict[str, Any],
+    chunk_size: int | None = None,
+) -> str:
     """Dump a single table to a CSV file
     Args:
         table: Table name
@@ -147,44 +181,46 @@ def dump_table(table: str, dump_dir: str, conn_params: Dict[str, Any], chunk_siz
         Path to output file
     """
     outfile = os.path.join(dump_dir, f"{table}.csv")
-    
+
     # Ensure any existing file is deleted before writing
     if os.path.exists(outfile):
         os.remove(outfile)
         print(f"Removed existing file: {outfile}")
-    
+
     with db_connect(**conn_params) as conn:
         if chunk_size:
             # For large tables, process in chunks to avoid memory issues
             total_count = 0
-            with open(outfile, 'w') as f:
+            with open(outfile, "w") as f:
                 # Get total count for progress tracking
                 with conn.cursor() as cur:
                     cur.execute(f"SELECT COUNT(*) FROM {table}")
                     total_rows = cur.fetchone()[0]
-                
+
                 # First chunk includes headers
                 first_chunk = True
                 offset = 0
-                
+
                 while True:
                     query = f"SELECT * FROM {table} LIMIT {chunk_size} OFFSET {offset}"
                     chunk_df = pd.read_sql(query, conn)
-                    
+
                     if chunk_df.empty:
                         break
-                    
+
                     # Write header only for first chunk
-                    chunk_df.to_csv(f, header=first_chunk, index=False, mode='a')
+                    chunk_df.to_csv(f, header=first_chunk, index=False, mode="a")
                     first_chunk = False
-                    
+
                     # Update progress
                     rows_processed = min(offset + chunk_size, total_rows)
                     total_count += len(chunk_df)
                     offset += chunk_size
-                    
-                    print(f"  {table}: processed {rows_processed}/{total_rows} rows ({int(rows_processed/total_rows*100)}%)")
-                    
+
+                    print(
+                        f"  {table}: processed {rows_processed}/{total_rows} rows ({int(rows_processed / total_rows * 100)}%)"
+                    )
+
                     if len(chunk_df) < chunk_size:
                         break
         else:
@@ -192,12 +228,15 @@ def dump_table(table: str, dump_dir: str, conn_params: Dict[str, Any], chunk_siz
             df = pd.read_sql(f"SELECT * FROM {table}", conn)
             df.to_csv(outfile, index=False)
             total_count = len(df)
-    
+
     print(f"Dumped {table} to {outfile} ({total_count} records)")
     return outfile
 
+
 # functions
-def dump_all_tables(dump_dir: str, tenant: str, parallel: int = 1, chunk_size: Optional[int] = None) -> List[str]:
+def dump_all_tables(
+    dump_dir: str, tenant: str, parallel: int = 1, chunk_size: int | None = None
+) -> list[str]:
     """Dump all tables to CSV files
     Args:
         dump_dir: Directory to dump CSV files
@@ -215,20 +254,25 @@ def dump_all_tables(dump_dir: str, tenant: str, parallel: int = 1, chunk_size: O
 
     # skip tables
     db_tables = [x for x in db_tables if x not in ["screcounter_trace"]]
-    
+
     # create dump directory
     dump_dir = os.path.join(dump_dir, tenant)
     os.makedirs(dump_dir, exist_ok=True)
-        
+
     # Extract connection parameters from current connection to create new connections in worker threads
     conn_params = {}
     outfiles = []
-    
+
     # Use parallel processing if requested
     if parallel > 1 and len(db_tables) > 1:
         print(f"Dumping {len(db_tables)} tables using {parallel} parallel processes")
         with concurrent.futures.ProcessPoolExecutor(max_workers=parallel) as executor:
-            futures = {executor.submit(dump_table, table, dump_dir, conn_params, chunk_size): table for table in db_tables}
+            futures = {
+                executor.submit(
+                    dump_table, table, dump_dir, conn_params, chunk_size
+                ): table
+                for table in db_tables
+            }
             for future in concurrent.futures.as_completed(futures):
                 table = futures[future]
                 try:
@@ -244,8 +288,9 @@ def dump_all_tables(dump_dir: str, tenant: str, parallel: int = 1, chunk_size: O
                 outfiles.append(outfile)
             except Exception as e:
                 print(f"Error dumping {table}: {e}")
-    
+
     return outfiles
+
 
 def count_records_per_table(conn: connection) -> None:
     """Count records in each table in the database
@@ -253,12 +298,13 @@ def count_records_per_table(conn: connection) -> None:
         conn: Database connection
     """
     db_tables = db_list_tables(conn)
-    
+
     for table in db_tables:
         with conn.cursor() as cur:
             cur.execute(f"SELECT COUNT(*) FROM {table}")
             count = cur.fetchone()[0]
             print(f"{table}: {count}")
+
 
 def display_table_schemas(conn: connection) -> None:
     """Display the schema for each table in the database.
@@ -304,6 +350,7 @@ def display_table_schemas(conn: connection) -> None:
                     print(f"  {col_name}: {type_str} ({null_str})")
             except Exception as e:
                 print(f"  Error fetching schema for table {table}: {e}")
+
 
 # functions
 def main(args):
@@ -383,7 +430,7 @@ def main(args):
         with db_connect() as conn:
             tbl_names = db_list_tables(conn)
             for table in args.drop:
-                print(f"Attempting to drop: \"{table}\"...")
+                print(f'Attempting to drop: "{table}"...')
                 if table not in tbl_names:
                     print(f"  Table {table} not found in database")
                     continue
@@ -391,7 +438,7 @@ def main(args):
                     cur.execute(f"DROP TABLE {table}")
                     conn.commit()
                 print(f"  Dropped: {table}")
-    
+
     # delete SRX accessions from all tables, except eval
     if args.delete_srx:
         with db_connect() as conn:
@@ -399,25 +446,36 @@ def main(args):
                 # srx metadata & srx_srr
                 for tbl_name in ["srx_metadata", "srx_srr"]:
                     with conn.cursor() as cur:
-                        cur.execute(f"DELETE FROM {tbl_name} WHERE srx_accession = '{srx}'")
+                        cur.execute(
+                            f"DELETE FROM {tbl_name} WHERE srx_accession = '{srx}'"
+                        )
                         conn.commit()
                 # screcounter_log & screcounter_star
-                for tbl_name in ["screcounter_log", "screcounter_star_params", "screcounter_star_results"]:
+                for tbl_name in [
+                    "screcounter_log",
+                    "screcounter_star_params",
+                    "screcounter_star_results",
+                ]:
                     with conn.cursor() as cur:
                         cur.execute(f"DELETE FROM {tbl_name} WHERE sample = '{srx}'")
                         conn.commit()
                 print(f"Deleted: {srx}")
-    
+
     # delete SRX accessions from scRecounter tables
     if args.delete_srx_screcounter:
         with db_connect() as conn:
             for srx in args.delete_srx_screcounter:
                 # screcounter_log & screcounter_star
-                for tbl_name in ["screcounter_log", "screcounter_star_params", "screcounter_star_results"]:
+                for tbl_name in [
+                    "screcounter_log",
+                    "screcounter_star_params",
+                    "screcounter_star_results",
+                ]:
                     with conn.cursor() as cur:
                         cur.execute(f"DELETE FROM {tbl_name} WHERE sample = '{srx}'")
                         conn.commit()
                 print(f"Deleted: {srx}")
+
 
 def get_sep(infile: str) -> str:
     """Determine separator from file extension
@@ -435,6 +493,7 @@ def get_sep(infile: str) -> str:
         print("Input file must be CSV or TSV")
         sys.exit(1)
     return sep
+
 
 # Example usage
 if __name__ == "__main__":

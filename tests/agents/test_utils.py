@@ -23,13 +23,6 @@ class TestLoadSettings:
         # Setup mock settings that behave more like a Dynaconf object
         # Need to mock the __getitem__ behaviour for nested access like settings['models']['default']
         mock_dynaconf_instance = MagicMock()
-        # Set up nested mocks or direct return values as needed for tests using load_settings
-        # Example:
-        # mock_dynaconf_instance.__getitem__.side_effect = lambda key: {
-        #     "models": {"default": "o4-mini"},
-        #     "temperature": {"default": 0.1},
-        #     "reasoning_effort": {"default": "low"}
-        # }.get(key, MagicMock()) # Return a mock for keys not explicitly defined
 
         # For simplicity here, just make it return a MagicMock instance
         mock_dynaconf.return_value = mock_dynaconf_instance
@@ -53,7 +46,7 @@ class TestSetModel:
         # Create mock settings that handles KeyError for service_tier and flex_timeout properly
         def settings_getitem(key):
             available_settings = {
-                "models": {"default": "o4-mini"},
+                "models": {"default": "gpt-5-mini"},
                 "temperature": {"default": 0.1},
                 "reasoning_effort": {"default": "low"},
             }
@@ -70,7 +63,7 @@ class TestSetModel:
         with patch("SRAgent.agents.utils.FlexTierChatOpenAI") as mock_chat:
             model = set_model()
             mock_chat.assert_called_once_with(
-                model_name="o4-mini",
+                model_name="gpt-5-mini",
                 temperature=None,
                 reasoning_effort="low",
                 max_tokens=None,
@@ -85,7 +78,7 @@ class TestSetModel:
         # Create mock settings that handles KeyError for service_tier and flex_timeout properly
         def settings_getitem(key):
             available_settings = {
-                "models": {"default": "gpt-4.1-mini"},
+                "models": {"default": "gpt-4o-mini"},
                 "temperature": {"default": 0.1},
                 "reasoning_effort": {"default": "low"},
             }
@@ -98,11 +91,11 @@ class TestSetModel:
         mock_settings.__getitem__.side_effect = settings_getitem
         mock_load_settings.return_value = mock_settings
 
-        # Test with GPT-4.1-mini model
+        # Test with GPT-4o-mini model
         with patch("SRAgent.agents.utils.FlexTierChatOpenAI") as mock_chat:
             model = set_model()
             mock_chat.assert_called_once_with(
-                model_name="gpt-4.1-mini",
+                model_name="gpt-4o-mini",
                 temperature=0.1,
                 reasoning_effort=None,
                 max_tokens=None,
@@ -117,7 +110,7 @@ class TestSetModel:
         # Create mock settings that handles KeyError for service_tier and flex_timeout properly
         def settings_getitem(key):
             available_settings = {
-                "models": {"default": "o4-mini"},
+                "models": {"default": "gpt-4o-mini"},
                 "temperature": {"default": 0.1},
                 "reasoning_effort": {"default": "low"},
             }
@@ -133,10 +126,10 @@ class TestSetModel:
         # Test with override parameters
         with patch("SRAgent.agents.utils.FlexTierChatOpenAI") as mock_chat:
             model = set_model(
-                model_name="gpt-4.1-mini", temperature=0.5, reasoning_effort="high"
+                model_name="gpt-4o-mini", temperature=0.5, reasoning_effort="high"
             )
             mock_chat.assert_called_once_with(
-                model_name="gpt-4.1-mini",
+                model_name="gpt-4o-mini",
                 temperature=0.5,
                 reasoning_effort=None,
                 max_tokens=None,
@@ -151,7 +144,7 @@ class TestSetModel:
         # Create mock settings that handles KeyError for service_tier and flex_timeout properly
         def settings_getitem(key):
             available_settings = {
-                "models": {"default": "o4-mini", "entrez": "o4-mini"},
+                "models": {"default": "gpt-5-mini", "entrez": "gpt-5-mini"},
                 "temperature": {"default": 0.1, "entrez": 0.2},
                 "reasoning_effort": {"default": "low", "entrez": "medium"},
             }
@@ -168,7 +161,7 @@ class TestSetModel:
         with patch("SRAgent.agents.utils.FlexTierChatOpenAI") as mock_chat:
             model = set_model(agent_name="entrez")
             mock_chat.assert_called_once_with(
-                model_name="o4-mini",
+                model_name="gpt-5-mini",
                 temperature=None,
                 reasoning_effort="medium",
                 max_tokens=None,

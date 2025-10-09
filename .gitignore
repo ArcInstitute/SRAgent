@@ -10,6 +10,8 @@ archive/
 db_bkup/
 ignore/
 data/
+papers/
+tasks/
 *ChrisC_metadata*
 counted_SRX.txt
 notebooks/czi_annotate/

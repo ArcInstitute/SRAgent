@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "SRAgent"
-version = "0.5.1"
+version = "0.6.0"
 description = "Agentic workflows for obtaining data from the Sequence Read Archive"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -40,7 +40,8 @@ dependencies = [
     "obonet~=1.1.0",
     "protobuf~=5.29.4",
     "appdirs~=1.4.4",
-    "rich~=14.0.0"
+    "rich~=14.0.0",
+    "cloudscraper~=1.2.71"
 ]
 
 [project.optional-dependencies]

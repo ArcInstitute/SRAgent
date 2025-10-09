@@ -1,9 +1,10 @@
 # import
 ## batteries
+from __future__ import annotations
 import os
 import sys
 import time
-from typing import Annotated, List, Optional
+from typing import Annotated, Optional
 from urllib.error import HTTPError
 
 ## 3rd party
@@ -39,19 +40,19 @@ def to_sci_name(organism: str) -> str:
 
 @tool
 def esearch_scrna(
-    query_terms: Annotated[List[str], "Entrez query terms"] = [
+    query_terms: Annotated[list[str], "Entrez query terms"] = [
         "10X Genomics",
         "single cell RNA sequencing",
         "single cell RNA-seq",
     ],
     database: Annotated[str, "Database name ('sra' or 'gds')"] = "sra",
-    organisms: Annotated[List[str], "List of organisms to search."] = [
+    organisms: Annotated[list[str], "List of organisms to search."] = [
         "human",
         "mouse",
     ],
     max_ids: Annotated[Optional[int], "Maximum number of IDs to return."] = 10,
     config: RunnableConfig = None,
-) -> Annotated[List[str], "Entrez IDs of database records"]:
+) -> Annotated[list[str], "Entrez IDs of database records"]:
     """
     Find scRNA-seq datasets in the SRA or GEO databases.
     """
@@ -105,13 +106,13 @@ def esearch_scrna(
 def esearch_batch(
     esearch_query: str,
     database: str,
-    max_ids: Optional[int] = None,
+    max_ids: int | None = None,
     verbose: bool = False,
     filter_existing: bool = False,
     max_retries: int = 3,
     base_delay: float = 3.0,
-    target_entrez_ids: Optional[List[str]] = None,
-) -> List[str]:
+    target_entrez_ids: Optional[list[str]] = None,
+) -> list[str]:
     """
     Search for Entrez IDs using the Entrez.esearch function.
     Args:

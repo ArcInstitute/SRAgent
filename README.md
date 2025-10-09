@@ -148,6 +148,52 @@ SRAgent sragent "Obtain any available publications for GSE196830"
 SRAgent sragent "Which 10X Genomics technology was used for ERX11887200?"
 ```
 
+## Papers agent
+
+Locate publications linked to SRA accessions and download the corresponding manuscripts.
+
+* Input formats: single accession (SRX/PRJ/ERX/ERP) or a CSV with an accession column (`--accession-column` to override the default `accession`).
+* Workflow: 
+  * converts accessions to Entrez IDs
+  * finds linked PubMed IDs
+  * extracts DOIs
+  * tries multiple sources to fetch manuscripts from the DOIs (preprint servers, CORE, Europe PMC, Unpaywall)
+* Output: console summary of publications, DOIs, download status, and stored files under `--output-dir/<accession>`.
+* CSV enrichment: when a CSV input is provided, an updated copy is written to `--output-dir/<input-filename>` with added `pubmed_id`, `doi`, and `download_path` columns.
+* Helpful options: 
+  * `--core-api-key`/`CORE_API_KEY` for CORE API
+  * `--email`/`EMAIL` for Unpaywall
+  * `--max-concurrency` for max concurrent tasks
+  * `--recursion-limit` for max recursion depth
+  * `--write-graph` for writing the workflow graph to a file
+
+#### Examples
+
+Download papers for a single SRX accession:
+
+```bash
+SRAgent papers SRX4967527
+```
+
+Use a study accession (SRP):
+
+```bash
+SRAgent papers SRP167700
+```
+
+Use a bioproject accession (PRJNA):
+
+```bash
+SRAgent papers PRJNA498286
+```
+
+Process a CSV and add DOIs and metadata to the CSV:
+
+```bash
+SRAgent papers accessions.csv
+```
+
+
 ## SRX-info agent
 
 Obtain specific metadata for >=1 SRA dataset.

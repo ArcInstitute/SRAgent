@@ -1,11 +1,11 @@
 # import
 ## batteries
+from __future__ import annotations
 import os
 import json
 import random
 import decimal
 from subprocess import Popen, PIPE
-from typing import List, Tuple, Optional
 import xml.etree.ElementTree as ET
 from xml.parsers.expat import ExpatError
 from Bio import Entrez
@@ -15,7 +15,7 @@ import xmltodict
 
 
 # functions
-def batch_ids(ids: List[str], batch_size: int) -> List[List[str]]:
+def batch_ids(ids: list[str], batch_size: int) -> list[list[str]]:
     """
     Batch a list of IDs into smaller lists of a given size.
     Args:
@@ -51,7 +51,7 @@ def truncate_values(record, max_length: int) -> str:
 
 
 def xml2json(
-    record: str, indent: Optional[int] = None, max_records: Optional[int] = None
+    record: str, indent: int | None = None, max_records: int | None = None
 ) -> str:
     """
     Convert an XML record to a JSON object.
@@ -71,7 +71,7 @@ def xml2json(
         return record
 
 
-def run_cmd(cmd: list) -> Tuple[int, str, str]:
+def run_cmd(cmd: list) -> tuple[int, str, str]:
     """
     Run sub-command and return returncode, output, and error.
     Args:
@@ -115,7 +115,7 @@ def to_json(results, indent: int = None) -> str:
         return f"Error converting results to JSON: {str(e)}"
 
 
-def join_accs(accessions: List[str]) -> str:
+def join_accs(accessions: list[str]) -> str:
     """
     Join a list of accessions into a string.
     Args:
@@ -150,7 +150,7 @@ def set_entrez_access() -> None:
     Entrez.api_key = os.getenv(f"NCBI_API_KEY{n}", os.getenv("NCBI_API_KEY"))
 
 
-def truncate_data(data, max_items: Optional[int] = None) -> dict:
+def truncate_data(data, max_items: int | None = None) -> dict:
     """
     Limits the number of leaf nodes in a nested data structure.
     Args:

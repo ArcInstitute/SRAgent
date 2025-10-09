@@ -40,10 +40,14 @@ def papers_parser(subparsers) -> None:
       - CSV file: Must have 'accession' column (header required)
     
     Examples:
-      SRAgent papers SRX4967527
-      SRAgent papers SRP012345
-      SRAgent papers accessions.csv
-      SRAgent papers SRX4967527 --output-dir my_papers
+      # SRA experiments
+        SRAgent papers SRX4967527
+      # SRA projects
+        SRAgent papers PRJNA615032
+      # Multiple accessions
+        SRAgent papers accessions.csv
+      # Set output directory
+        SRAgent papers SRX4967527 --output-dir my_papers
     """
     sub_parser = subparsers.add_parser(
         "papers", help=help, description=desc, formatter_class=CustomFormatter
@@ -112,6 +116,7 @@ def _parse_accession_input(accession_input: str) -> list[str]:
         # Read CSV
         try:
             df = pd.read_csv(accession_input)
+            df.columns = df.columns.str.lower()
             if "accession" not in df.columns:
                 print("ERROR: CSV must have 'accession' column", file=sys.stderr)
                 sys.exit(1)

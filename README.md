@@ -169,17 +169,30 @@ Locate publications linked to SRA accessions and download the corresponding manu
 
 #### Examples
 
-Download papers for a single accession:
+Download papers for a single SRX accession:
 
 ```bash
 SRAgent papers SRX4967527
 ```
 
-Process a CSV and create an enriched output file:
+Use a study accession (SRP):
+
+```bash
+SRAgent papers SRP167700
+```
+
+Use a bioproject accession (PRJNA):
+
+```bash
+SRAgent papers PRJNA498286
+```
+
+Process a CSV and add DOIs and metadata to the CSV:
 
 ```bash
 SRAgent papers accessions.csv
 ```
+
 
 ## SRX-info agent
 

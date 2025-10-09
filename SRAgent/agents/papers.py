@@ -452,7 +452,10 @@ if __name__ == "__main__":
         # Test with a known SRX accession
         # accession = "SRX4967527"
         # accession = "PRJNA831566"  # Replogle 2022
-        accession = "PRJNA615032"  # SARS-CoV-2 Transcriptomics
+        # accession = "PRJNA615032"  # SARS-CoV-2 Transcriptomics
+        # accession = "PRJNA1106903"  # Single-Cell RNA-seq Technology Comparison
+        # accession = "PRJNA1215450"  # Human Immune Aging Atlas
+        accession = "PRJNA608224"  # SARS-CoV-2 Direct RNA Sequencing
         result = await process_accession(
             accession, output_base_dir="papers", email=os.getenv("EMAIL1")
         )
@@ -461,7 +464,7 @@ if __name__ == "__main__":
         print(f"  PubMed IDs: {result['pubmed_ids']}")
         print(f"  DOIs: {result['dois']}")
         print(f"  Summary: {result['summary']}")
-        print(f"\nDownload results:")
+        print("\nDownload results:")
         for pmid, info in result["downloads"].items():
             print(
                 f"  PMID {pmid}: {info['status']} - {info.get('path') or info.get('error')}"

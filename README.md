@@ -172,13 +172,13 @@ Locate publications linked to SRA accessions and download the corresponding manu
 Download papers for a single accession:
 
 ```bash
-SRAgent papers SRX4967527 --output-dir papers
+SRAgent papers SRX4967527
 ```
 
 Process a CSV and create an enriched output file:
 
 ```bash
-SRAgent papers accessions.csv --output-dir papers
+SRAgent papers accessions.csv
 ```
 
 ## SRX-info agent

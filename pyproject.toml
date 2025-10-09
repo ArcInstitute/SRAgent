@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "SRAgent"
-version = "0.5.1"
+version = "0.5.2"
 description = "Agentic workflows for obtaining data from the Sequence Read Archive"
 readme = "README.md"
 requires-python = ">=3.11"

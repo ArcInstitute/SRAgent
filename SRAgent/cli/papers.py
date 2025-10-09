@@ -10,7 +10,6 @@ from typing import Any
 
 ## 3rd party
 import pandas as pd
-from Bio import Entrez
 from rich.console import Console
 from rich.table import Table
 

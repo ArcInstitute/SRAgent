@@ -78,7 +78,7 @@ class TestSetModel:
         # Create mock settings that handles KeyError for service_tier and flex_timeout properly
         def settings_getitem(key):
             available_settings = {
-                "models": {"default": "gpt-5-mini"},
+                "models": {"default": "gpt-4o-mini"},
                 "temperature": {"default": 0.1},
                 "reasoning_effort": {"default": "low"},
             }
@@ -91,11 +91,11 @@ class TestSetModel:
         mock_settings.__getitem__.side_effect = settings_getitem
         mock_load_settings.return_value = mock_settings
 
-        # Test with GPT-4.1-mini model
+        # Test with GPT-4o-mini model
         with patch("SRAgent.agents.utils.FlexTierChatOpenAI") as mock_chat:
             model = set_model()
             mock_chat.assert_called_once_with(
-                model_name="gpt-5-mini",
+                model_name="gpt-4o-mini",
                 temperature=0.1,
                 reasoning_effort=None,
                 max_tokens=None,
@@ -110,7 +110,7 @@ class TestSetModel:
         # Create mock settings that handles KeyError for service_tier and flex_timeout properly
         def settings_getitem(key):
             available_settings = {
-                "models": {"default": "gpt-5-mini"},
+                "models": {"default": "gpt-4o-mini"},
                 "temperature": {"default": 0.1},
                 "reasoning_effort": {"default": "low"},
             }
@@ -126,10 +126,10 @@ class TestSetModel:
         # Test with override parameters
         with patch("SRAgent.agents.utils.FlexTierChatOpenAI") as mock_chat:
             model = set_model(
-                model_name="gpt-5-mini", temperature=0.5, reasoning_effort="high"
+                model_name="gpt-4o-mini", temperature=0.5, reasoning_effort="high"
             )
             mock_chat.assert_called_once_with(
-                model_name="gpt-5-mini",
+                model_name="gpt-4o-mini",
                 temperature=0.5,
                 reasoning_effort=None,
                 max_tokens=None,

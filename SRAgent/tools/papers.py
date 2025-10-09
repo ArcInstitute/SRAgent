@@ -271,7 +271,6 @@ def _download_from_preprint_server(doi: str, output_path: str) -> dict:
 # ============================================================================
 
 
-@tool
 def download_paper_by_doi(
     doi: Annotated[
         str,

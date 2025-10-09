@@ -5,6 +5,7 @@ import os
 import sys
 import asyncio
 import argparse
+from pathlib import Path
 from typing import Any
 
 ## 3rd party
@@ -69,6 +70,12 @@ def papers_parser(subparsers) -> None:
         help="Base directory for saving papers (default: papers/)",
     )
     sub_parser.add_argument(
+        "--accession-column",
+        type=str,
+        default="accession",
+        help="Name of the column containing the SRA accessions, if providing a CSV (default: accession)",
+    )
+    sub_parser.add_argument(
         "--core-api-key",
         type=str,
         default=None,
@@ -101,26 +108,38 @@ def papers_parser(subparsers) -> None:
     )
 
 
-def _parse_accession_input(accession_input: str) -> list[str]:
+def _parse_accession_input(
+    accession_input: str, accession_column: str
+) -> tuple[list[str], pd.DataFrame | None]:
     """
     Parse accession input - either single accession or CSV file.
 
     Args:
         accession_input: Single accession or path to CSV
+        accession_column: Name of the column containing the SRA accessions
 
     Returns:
-        List of accessions
+        Tuple of (list of accessions, original dataframe if CSV else None)
     """
     # Check if it's a file
     if os.path.isfile(accession_input):
         # Read CSV
         try:
             df = pd.read_csv(accession_input)
-            df.columns = df.columns.str.lower()
-            if "accession" not in df.columns:
-                print("ERROR: CSV must have 'accession' column", file=sys.stderr)
+            if accession_column not in df.columns:
+                print(
+                    f"ERROR: CSV must have '{accession_column}' column",
+                    file=sys.stderr,
+                )
                 sys.exit(1)
-            return df["accession"].tolist()
+            accessions = df[accession_column].dropna().astype(str).tolist()
+            if len(accessions) < len(df):
+                missing = len(df) - len(accessions)
+                print(
+                    f"WARNING: Skipped {missing} row(s) with missing accession values",
+                    file=sys.stderr,
+                )
+            return accessions, df
         except Exception as e:
             print(f"ERROR: Failed to read CSV: {e}", file=sys.stderr)
             sys.exit(1)
@@ -137,7 +156,7 @@ def _parse_accession_input(accession_input: str) -> list[str]:
                 f"WARNING: Accession '{accession_input}' doesn't match expected format (SRX*, SRP*, ERX*, ERP*)",
                 file=sys.stderr,
             )
-        return [accession_input]
+        return [accession_input], None
 
 
 async def _process_accessions_batch(
@@ -180,6 +199,80 @@ async def _process_accessions_batch(
     results = await asyncio.gather(*tasks)
 
     return results
+
+
+def _write_results_csv(
+    original_df: pd.DataFrame,
+    results: list[dict[str, Any]],
+    output_dir: str,
+    accession_column: str,
+    output_filename: str,
+) -> Path:
+    """
+    Merge processing results back into the original dataframe and write to disk.
+
+    Args:
+        original_df: Dataframe loaded from the input CSV
+        results: Output from processing each accession
+        output_dir: Directory where the updated CSV should be written
+        accession_column: Name of the accession column to join on
+        output_filename: Filename to use for the saved CSV
+
+    Returns:
+        Path to the written CSV file
+    """
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    # create dataframe of found papers info
+    rows: list[dict[str, Any]] = []
+    for result in results:
+        accession = result["accession"]
+        dois = result.get("dois", {})
+        downloads = result.get("downloads", {})
+
+        if not dois:
+            rows.append(
+                {
+                    accession_column: accession,
+                    "pubmed_id": None,
+                    "doi": None,
+                    "download_path": None,
+                }
+            )
+            continue
+
+        for pubmed_id, doi in dois.items():
+            download_info = downloads.get(pubmed_id, {})
+            rows.append(
+                {
+                    accession_column: accession,
+                    "pubmed_id": pubmed_id,
+                    "doi": doi,
+                    "download_path": download_info.get("path"),
+                }
+            )
+
+    results_df = (
+        pd.DataFrame(rows)
+        if rows
+        else pd.DataFrame(
+            columns=[accession_column, "pubmed_id", "doi", "download_path"]
+        )
+    )
+
+    # merge with original dataframe
+    merged_df = original_df.merge(
+        results_df,
+        how="left",
+        left_on=accession_column,
+        right_on=accession_column,
+    )
+
+    # write to csv
+    output_file = output_path / output_filename
+    merged_df.to_csv(output_file, index=False)
+    return output_file
 
 
 def _display_results_table(results: list[dict[str, Any]]) -> None:
@@ -263,7 +356,9 @@ def papers_main(args: argparse.Namespace) -> None:
         return
 
     # Parse accession input
-    accessions = _parse_accession_input(args.accession_input)
+    accessions, input_df = _parse_accession_input(
+        args.accession_input, args.accession_column
+    )
 
     print(f"Processing {len(accessions)} accession(s)...")
     print(f"Output directory: {args.output_dir}")
@@ -283,6 +378,18 @@ def papers_main(args: argparse.Namespace) -> None:
 
     # Display results
     _display_results_table(results)
+
+    # If input came from CSV, write updated results
+    if input_df is not None:
+        output_filename = Path(args.accession_input).name
+        updated_csv = _write_results_csv(
+            original_df=input_df,
+            results=results,
+            output_dir=args.output_dir,
+            accession_column=args.accession_column,
+            output_filename=output_filename,
+        )
+        print(f"Updated CSV written to: {updated_csv}")
 
 
 # main

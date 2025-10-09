@@ -242,7 +242,7 @@ def set_model(
     # Validate service_tier for OpenAI models
     if service_tier == "flex" and not re.search(r"^(o[0-9]|^gpt-5)", model_name):
         raise ValueError(
-            f"Service tier 'flex' only works with o3 and o4-mini, gpt-5-mini models, not {model_name} (agent: {agent_name})"
+            f"Service tier 'flex' only works with o3 and o4-mini, & gpt-5* models, not {model_name} (agent: {agent_name})"
         )
 
     # Agents that use structured outputs must not enable Claude "thinking" mode

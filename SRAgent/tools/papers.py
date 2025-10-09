@@ -15,22 +15,23 @@ from langchain_core.tools import tool
 # ============================================================================
 
 
-def _get_core_info(doi: str) -> dict | None:
+def _get_core_info(doi: str, api_key: str | None = None) -> dict | None:
     """
     Get paper information from CORE API.
 
     Args:
         doi: DOI of the paper
+        api_key: CORE API key (optional, uses CORE_API_KEY env var if not provided)
 
     Returns:
         Dictionary with work info or None if not found/error
     """
     base_url = "https://api.core.ac.uk/v3"
 
-    try:
-        api_key = os.environ["CORE_API_KEY"]
-    except KeyError:
-        return "Error: CORE_API_KEY is not set"
+    if api_key is None:
+        api_key = os.environ.get("CORE_API_KEY")
+        if not api_key:
+            return None
 
     headers = {"Authorization": f"Bearer {api_key}"}
     params = {"q": f"doi:{doi}", "limit": 1}
@@ -85,6 +86,44 @@ def _get_unpaywall_info(doi: str, email: str | None = None) -> dict | None:
                 "pdf_url": data["best_oa_location"].get("url_for_pdf"),
                 "version": data["best_oa_location"].get("version"),
                 "host_type": data["best_oa_location"].get("host_type"),
+            }
+    except Exception:
+        pass
+
+    return None
+
+
+def _get_europepmc_info(doi: str) -> dict | None:
+    """
+    Get paper information from Europe PMC API.
+
+    Args:
+        doi: DOI of the paper
+
+    Returns:
+        Dictionary with article info or None if not found/error
+    """
+    try:
+        # Search by DOI - no authentication required
+        search_url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=DOI:{doi}&format=json&pageSize=1"
+        response = requests.get(search_url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        if (
+            data.get("resultList")
+            and data["resultList"].get("result")
+            and len(data["resultList"]["result"]) > 0
+        ):
+            result = data["resultList"]["result"][0]
+
+            return {
+                "source": result.get("source"),  # e.g., "MED", "PMC", "PPR"
+                "id": result.get("id"),  # e.g., PMID or PMCID
+                "pmcid": result.get("pmcid"),
+                "has_pdf": result.get("hasPDF") == "Y",
+                "is_open_access": result.get("isOpenAccess") == "Y",
+                "in_epmc": result.get("inEPMC") == "Y",
             }
     except Exception:
         pass
@@ -228,10 +267,11 @@ def _download_from_preprint_server(doi: str, output_path: str) -> dict:
 def download_paper_by_doi(
     doi: Annotated[
         str,
-        "DOI of the paper (e.g., '10.1038/nature12373' or '10.48550/arXiv.2301.12345')",
+        "DOI of the paper (e.g., '10.1038/nature12373', '10.48550/arXiv.2301.12345', '10.1101/2020.03.15.20030213')",
     ],
-    output_path: Annotated[
-        str | None, "Path to save the PDF file. If None, the DOI is used"
+    output_path: Annotated[str, "Path to save the PDF file"] = "paper.pdf",
+    api_key: Annotated[
+        str | None, "CORE API key (optional, uses CORE_API_KEY env var if not provided)"
     ] = None,
     email: Annotated[
         str | None,
@@ -244,30 +284,24 @@ def download_paper_by_doi(
     This function tries multiple sources in order:
     1. For preprint DOIs (arXiv, bioRxiv, medRxiv): Try preprint server first
     2. Try CORE API
-    3. Try Unpaywall API
+    3. Try Europe PMC
+    4. Try Unpaywall API
 
     Supported DOI formats:
     - arXiv: 10.48550/arXiv.{arxiv_id}
     - bioRxiv/medRxiv: 10.1101/{date_code}
-    - Any other DOI format: tries CORE and Unpaywall
+    - Any other DOI format: tries CORE, Europe PMC, and Unpaywall
 
     Args:
         doi: DOI of the paper/preprint
-        output_path: Path to save the PDF file. If None, the DOI is used
+        output_path: Path to save the PDF file (or XML if PDF not available)
+        api_key: CORE API key (optional, uses CORE_API_KEY env var)
         email: Email for Unpaywall API (optional, uses EMAIL env var)
 
     Returns:
         Success message or detailed error message listing all sources attempted
     """
     errors = []
-
-    # set output path
-    if output_path is None or output_path == "":
-        output_path = f"{doi.replace('/', '_')}.pdf"
-    # ensure output directory exists
-    output_dir = os.path.dirname(output_path)
-    if output_dir and not os.path.exists(output_dir):
-        os.makedirs(output_dir)
 
     # Step 1: Try preprint server if it's a preprint DOI
     is_preprint = (
@@ -283,11 +317,16 @@ def download_paper_by_doi(
         errors.append(f"Preprint server: {result['message']}")
 
     # Step 2: Try CORE
-    core_info = _get_core_info(doi)
+    core_info = _get_core_info(doi, api_key)
     if core_info and core_info.get("download_url"):
         try:
             pdf_response = requests.get(core_info["download_url"], timeout=30)
             pdf_response.raise_for_status()
+
+            # Ensure output directory exists
+            output_dir = os.path.dirname(output_path)
+            if output_dir and not os.path.exists(output_dir):
+                os.makedirs(output_dir)
 
             with open(output_path, "wb") as f:
                 f.write(pdf_response.content)
@@ -296,12 +335,75 @@ def download_paper_by_doi(
         except Exception as e:
             errors.append(f"CORE: Download failed - {e}")
     else:
-        if os.environ.get("CORE_API_KEY"):
+        if api_key or os.environ.get("CORE_API_KEY"):
             errors.append("CORE: No download URL available")
         else:
             errors.append("CORE: Skipped (no API key)")
 
-    # Step 3: Try Unpaywall
+    # Step 3: Try Europe PMC
+    europepmc_info = _get_europepmc_info(doi)
+    if (
+        europepmc_info
+        and europepmc_info.get("is_open_access")
+        and europepmc_info.get("source")
+        and europepmc_info.get("id")
+    ):
+        try:
+            source = europepmc_info["source"]
+            article_id = europepmc_info["id"]
+
+            # Try PDF first (if hasPDF flag is true)
+            if europepmc_info.get("has_pdf"):
+                # Construct Europe PMC article page URL
+                pdf_url = (
+                    f"https://europepmc.org/articles/{source}{article_id}?pdf=render"
+                )
+
+                try:
+                    pdf_response = requests.get(pdf_url, timeout=30)
+                    if pdf_response.status_code == 200 and pdf_response.headers.get(
+                        "content-type", ""
+                    ).startswith("application/pdf"):
+                        # Ensure output directory exists
+                        output_dir = os.path.dirname(output_path)
+                        if output_dir and not os.path.exists(output_dir):
+                            os.makedirs(output_dir)
+
+                        with open(output_path, "wb") as f:
+                            f.write(pdf_response.content)
+
+                        return f"Successfully downloaded PDF from Europe PMC to {output_path}"
+                except Exception:
+                    pass  # Fall through to try XML
+
+            # Try full text XML as fallback
+            xml_url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/{source}/{article_id}/fullTextXML"
+            xml_response = requests.get(xml_url, timeout=30)
+            xml_response.raise_for_status()
+
+            # Change extension to .xml if we're downloading XML
+            if output_path.endswith(".pdf"):
+                output_path = output_path.replace(".pdf", ".xml")
+
+            # Ensure output directory exists
+            output_dir = os.path.dirname(output_path)
+            if output_dir and not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+
+            with open(output_path, "wb") as f:
+                f.write(xml_response.content)
+
+            return f"Successfully downloaded XML from Europe PMC to {output_path} (PDF not available)"
+
+        except Exception as e:
+            errors.append(f"Europe PMC: Download failed - {e}")
+    else:
+        if europepmc_info:
+            errors.append("Europe PMC: Article found but not open access")
+        else:
+            errors.append("Europe PMC: Article not found")
+
+    # Step 4: Try Unpaywall
     unpaywall_info = _get_unpaywall_info(doi, email)
     if unpaywall_info and unpaywall_info.get("pdf_url"):
         try:
@@ -339,12 +441,14 @@ if __name__ == "__main__":
 
     load_dotenv()
 
-    # Test regular paper (should try CORE then Unpaywall)
+    # Test regular paper (should try CORE then Europe PMC then Unpaywall)
     print("=" * 60)
     print("Test 1: Regular paper DOI")
     print("=" * 60)
     doi = "10.1136/BMJOPEN-2023-079350"
-    result = download_paper_by_doi.invoke({"doi": doi, "output_path": "tmp/paper1.pdf"})
+    result = download_paper_by_doi.invoke(
+        {"doi": doi, "output_path": "tmp/regular_paper.pdf"}
+    )
     print(result)
     print()
 
@@ -359,7 +463,7 @@ if __name__ == "__main__":
     print(result)
     print()
 
-    # Test bioRxiv (should try bioRxiv, then CORE, then Unpaywall)
+    # Test bioRxiv (should try bioRxiv, then CORE, then Europe PMC, then Unpaywall)
     print("=" * 60)
     print("Test 3: bioRxiv preprint")
     print("=" * 60)
@@ -370,9 +474,20 @@ if __name__ == "__main__":
     print(result)
     print()
 
-    # Test Unpaywall (use a DOI known to be in Unpaywall)
+    # Test Europe PMC (use a DOI known to be in Europe PMC OA subset)
     print("=" * 60)
-    print("Test 4: Paper from Unpaywall")
+    print("Test 4: Europe PMC open access paper")
+    print("=" * 60)
+    europepmc_doi = "10.1371/journal.pone.0000308"
+    result = download_paper_by_doi.invoke(
+        {"doi": europepmc_doi, "output_path": "tmp/europepmc_paper.pdf"}
+    )
+    print(result)
+    print()
+
+    # Test Unpaywall fallback
+    print("=" * 60)
+    print("Test 5: Paper from Unpaywall (if not in CORE/Europe PMC)")
     print("=" * 60)
     unpaywall_doi = "10.1371/journal.pone.0000308"
     result = download_paper_by_doi.invoke(

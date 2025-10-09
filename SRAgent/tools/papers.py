@@ -2,6 +2,7 @@
 ## batteries
 from __future__ import annotations
 import os
+import json
 from typing import Annotated
 
 ## 3rd party
@@ -53,7 +54,6 @@ def get_work_by_doi(
             "download_url": work.get("downloadUrl"),
             "full_text_available": work.get("fullText") is not None,
         }
-        import json
 
         return json.dumps(result, indent=2)
 
@@ -77,9 +77,6 @@ def download_paper_by_doi(
     if work_info_str.startswith("ERROR:") or work_info_str.startswith("Paper with DOI"):
         return work_info_str
 
-    # Parse the JSON response
-    import json
-
     try:
         work_info = json.loads(work_info_str)
     except Exception as e:
@@ -95,6 +92,10 @@ def download_paper_by_doi(
         pdf_response = requests.get(download_url)
         pdf_response.raise_for_status()
 
+        # check that output directory exists
+        if not os.path.exists(os.path.dirname(output_path)):
+            os.makedirs(os.path.dirname(output_path))
+        # write to output path
         with open(output_path, "wb") as f:
             f.write(pdf_response.content)
 
@@ -102,6 +103,129 @@ def download_paper_by_doi(
 
     except Exception as e:
         return f"ERROR: Failed to download PDF: {e}"
+
+
+@tool
+def download_preprint_by_doi(
+    doi: Annotated[
+        str,
+        "DOI of the preprint (e.g., '10.48550/arXiv.2301.12345' for arXiv, '10.1101/2020.03.15.20030213' for bioRxiv/medRxiv)",
+    ],
+    output_path: Annotated[str, "Path to save the PDF file"] = "preprint.pdf",
+) -> Annotated[str, "Status message indicating success or failure of the download"]:
+    """
+    Download a preprint from arXiv, bioRxiv, or medRxiv using its DOI.
+
+    This function automatically detects the source (arXiv, bioRxiv, or medRxiv) based on the DOI
+    and downloads the PDF from the appropriate repository.
+
+    Supported DOI formats:
+    - arXiv: 10.48550/arXiv.{arxiv_id}
+    - bioRxiv/medRxiv: 10.1101/{date_code}
+
+    Note: bioRxiv/medRxiv have Cloudflare protection (as of May 2025). This function attempts
+    to use cloudscraper if available, otherwise falls back to standard requests.
+    """
+    # Try to import cloudscraper for Cloudflare bypass
+    try:
+        import cloudscraper
+
+        use_cloudscraper = True
+    except ImportError:
+        use_cloudscraper = False
+
+    # Detect source from DOI
+    if doi.startswith("10.48550/arXiv.") or doi.startswith("10.48550/arxiv."):
+        # arXiv paper - doesn't need cloudscraper
+        arxiv_id = doi.replace("10.48550/arXiv.", "").replace("10.48550/arxiv.", "")
+        pdf_url = f"https://arxiv.org/pdf/{arxiv_id}.pdf"
+        source = "arXiv"
+        use_cloudscraper = False  # arXiv doesn't need it
+
+    elif doi.startswith("10.1101/"):
+        # bioRxiv or medRxiv - use API to get metadata first
+        try:
+            # Try bioRxiv API first
+            api_url = f"https://api.biorxiv.org/details/biorxiv/{doi}/na/json"
+            api_response = requests.get(api_url, timeout=10)
+
+            if api_response.status_code == 200:
+                data = api_response.json()
+                if data.get("collection") and len(data["collection"]) > 0:
+                    paper = data["collection"][0]
+                    version = paper.get("version", "1")
+                    pdf_url = (
+                        f"https://www.biorxiv.org/content/{doi}v{version}.full.pdf"
+                    )
+                    source = "bioRxiv"
+                else:
+                    # Try medRxiv API
+                    api_url = f"https://api.biorxiv.org/details/medrxiv/{doi}/na/json"
+                    api_response = requests.get(api_url, timeout=10)
+
+                    if api_response.status_code == 200:
+                        data = api_response.json()
+                        if data.get("collection") and len(data["collection"]) > 0:
+                            paper = data["collection"][0]
+                            version = paper.get("version", "1")
+                            pdf_url = f"https://www.medrxiv.org/content/{doi}v{version}.full.pdf"
+                            source = "medRxiv"
+                        else:
+                            return f"ERROR: Paper with DOI {doi} not found in bioRxiv or medRxiv API"
+                    else:
+                        return f"ERROR: Failed to query medRxiv API (status: {api_response.status_code})"
+            else:
+                # Try medRxiv API
+                api_url = f"https://api.biorxiv.org/details/medrxiv/{doi}/na/json"
+                api_response = requests.get(api_url, timeout=10)
+
+                if api_response.status_code == 200:
+                    data = api_response.json()
+                    if data.get("collection") and len(data["collection"]) > 0:
+                        paper = data["collection"][0]
+                        version = paper.get("version", "1")
+                        pdf_url = (
+                            f"https://www.medrxiv.org/content/{doi}v{version}.full.pdf"
+                        )
+                        source = "medRxiv"
+                    else:
+                        return f"ERROR: Paper with DOI {doi} not found in medRxiv API"
+                else:
+                    return f"ERROR: Failed to query bioRxiv/medRxiv APIs (status: {api_response.status_code})"
+
+        except Exception as e:
+            return f"ERROR: Failed to query bioRxiv/medRxiv API: {e}"
+    else:
+        return f"ERROR: Unsupported DOI format. This tool supports arXiv (10.48550/arXiv.*) and bioRxiv/medRxiv (10.1101/*) DOIs."
+
+    # Download the PDF
+    try:
+        if use_cloudscraper and source in ["bioRxiv", "medRxiv"]:
+            # Use cloudscraper for Cloudflare-protected sites
+            scraper = cloudscraper.create_scraper(
+                browser={"browser": "chrome", "platform": "windows", "desktop": True}
+            )
+            pdf_response = scraper.get(pdf_url, timeout=30)
+        else:
+            # Use standard requests for arXiv or if cloudscraper not available
+            pdf_response = requests.get(pdf_url, timeout=30)
+
+        pdf_response.raise_for_status()
+
+        with open(output_path, "wb") as f:
+            f.write(pdf_response.content)
+
+        scraper_info = (
+            " (using cloudscraper)"
+            if use_cloudscraper and source in ["bioRxiv", "medRxiv"]
+            else ""
+        )
+        return f"Successfully downloaded {source} paper {doi} to {output_path}{scraper_info}"
+
+    except Exception as e:
+        if not use_cloudscraper and source in ["bioRxiv", "medRxiv"]:
+            return f"ERROR: Failed to download PDF from {source}: {e}\n\nNOTE: bioRxiv/medRxiv require the 'cloudscraper' library to bypass Cloudflare protection. Install it with: pip install cloudscraper"
+        return f"ERROR: Failed to download PDF from {source}: {e}"
 
 
 if __name__ == "__main__":
@@ -112,13 +236,34 @@ if __name__ == "__main__":
 
     doi = "10.1136/BMJOPEN-2023-079350"
 
-    # get work by doi
-    result = get_work_by_doi.invoke({"doi": doi})
-    print("Work info:")
-    print(result)
-    print()
+    # # get work by doi
+    # result = get_work_by_doi.invoke({"doi": doi})
+    # print("Work info:")
+    # print(result)
+    # print()
 
-    # download paper by doi
-    print("Downloading paper...")
-    result = download_paper_by_doi.invoke({"doi": doi})
+    # # download paper by doi
+    # print("Downloading paper from CORE...")
+    # result = download_paper_by_doi.invoke({"doi": doi})
+    # print(result)
+    # print()
+
+    # # Test preprint downloads
+    # print("\nTesting preprint downloads:")
+
+    # # Test arXiv
+    # arxiv_doi = "10.48550/arXiv.2301.12345"
+    # print(f"\nDownloading arXiv paper {arxiv_doi}...")
+    # result = download_preprint_by_doi.invoke(
+    #     {"doi": arxiv_doi, "output_path": "tmp/arxiv_paper.pdf"}
+    # )
+    # print(result)
+
+    # Test bioRxiv
+    # biorxiv_doi = "10.1101/2025.08.08.669291"
+    biorxiv_doi = "10.1101/2025.02.27.640494"
+    print(f"\nDownloading bioRxiv paper {biorxiv_doi}...")
+    result = download_preprint_by_doi.invoke(
+        {"doi": biorxiv_doi, "output_path": "tmp/biorxiv_paper.pdf"}
+    )
     print(result)

@@ -1,10 +1,11 @@
 # import
 ## batteries
+from __future__ import annotations
 import os
 import time
 import tempfile
 from shutil import which
-from typing import Annotated, List
+from typing import Annotated
 
 ## 3rd party
 from langchain_core.tools import tool
@@ -17,7 +18,7 @@ from SRAgent.tools.utils import run_cmd, truncate_values, xml2json
 @tool
 def fastq_dump(
     SRR_accessions: Annotated[
-        List[str], "List of SRA run accessions (e.g., SRR1234567)"
+        list[str], "List of SRA run accessions (e.g., SRR1234567)"
     ],
     tries: Annotated[int, "Number of attempts to run fastq-dump"] = 3,
 ) -> str:
@@ -76,7 +77,7 @@ def fastq_dump(
 @tool
 def sra_stat(
     accessions: Annotated[
-        List[str],
+        list[str],
         "List of GEO and/or SRA accessions (e.g., SRP359840, SRR1234567, or GSE12345)",
     ],
     tries: Annotated[int, "Number of attempts to run sra-stat"] = 3,

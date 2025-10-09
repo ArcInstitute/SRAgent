@@ -40,7 +40,8 @@ dependencies = [
     "obonet~=1.1.0",
     "protobuf~=5.29.4",
     "appdirs~=1.4.4",
-    "rich~=14.0.0"
+    "rich~=14.0.0",
+    "cloudscraper~=1.2.71"
 ]
 
 [project.optional-dependencies]

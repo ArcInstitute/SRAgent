@@ -426,6 +426,34 @@ SRAgent --no-summaries \
     "Obtain recent single cell RNA-seq datasets in the SRA database"
 ```
 
+## Claude Skill
+
+SRAgent is available as a [Claude skill](https://docs.claude.com/en/docs/agents-and-tools/agent-skills) for a powerful natural language interface. The skill enables Claude to query the Sequence Read Archive (SRA), retrieve scientific publications, and analyze genomics metadata.
+
+It supports:
+*   **Accession Conversion:** Convert between formats like GSE, SRP, SRX, and SRR.
+*   **Metadata Extraction:** Identify sequencing platform, library strategy, organism, and single-cell technology.
+*   **Publication Retrieval:** Find and download manuscripts associated with genomics datasets.
+
+For detailed setup and usage instructions, see the [Claude skill documentation](./claude-skill/README.md).
+
+### Example Queries
+
+**Accession Conversion:**
+```
+"Convert GSE121737 to SRX accessions"
+```
+
+**Metadata Extraction:**
+```
+"What sequencing technology was used for ERX11887200?"
+```
+
+**Paper Retrieval:**
+```
+"Find all publications associated with study PRJNA498286"
+```
+
 ## Workflow status
 
 By default, most SRAgent sub-commands (e.g., `entrez` and `sragent`) use "fancy" CLI output formatting:

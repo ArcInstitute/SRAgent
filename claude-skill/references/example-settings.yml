@@ -1,11 +1,3 @@
-default:
-  db_host: "35.243.133.29"
-  db_port: 5432
-  db_user: "postgres"
-  db_timeout: 30
-  service_tier: "standard"
-  flex_timeout: 180
-
 test:
   db_name: "sragent-test"
   models:

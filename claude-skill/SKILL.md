@@ -302,7 +302,7 @@ result = bash_tool(
 
 # Example: Get metadata
 result = bash_tool(
-    command="SRAgent--no-progress --no-summaries sragent 'Which 10X technology was used for SRX4967527?'",
+    command="SRAgent --no-progress --no-summaries sragent 'Which 10X technology was used for SRX4967527?'",
     description="Determining library preparation technology"
 )
 

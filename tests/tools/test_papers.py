@@ -18,7 +18,7 @@ def test_download_paper_by_doi_preprint_success(monkeypatch, tmp_path):
         output_path=str(tmp_path / "paper.pdf"),
     )
 
-    assert result == f"Successfully downloaded from bioRxiv to {tmp_path/'paper.pdf'}"
+    assert result == f"Successfully downloaded from bioRxiv to {tmp_path / 'paper.pdf'}"
     assert calls["preprint_args"][0] == "10.1101/2025.02.27.640494"
 
 
@@ -32,6 +32,7 @@ def test_download_paper_by_doi_all_sources_fail(monkeypatch, tmp_path):
     monkeypatch.setattr(papers, "_get_core_info", lambda doi, api_key=None: None)
     monkeypatch.setattr(papers, "_get_europepmc_info", lambda doi: None)
     monkeypatch.setattr(papers, "_get_unpaywall_info", lambda doi, email=None: None)
+    monkeypatch.delenv("CORE_API_KEY", raising=False)
 
     message = papers.download_paper_by_doi(
         doi="10.48550/arXiv.12345",

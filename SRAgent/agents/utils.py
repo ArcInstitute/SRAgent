@@ -7,6 +7,7 @@ from importlib import resources
 from typing import Dict, Any, Optional, Set
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
+from langchain_google_genai import ChatGoogleGenerativeAI
 from dynaconf import Dynaconf
 import openai
 
@@ -308,6 +309,27 @@ def set_model(
             max_tokens=max_tokens,
             service_tier=service_tier,
             timeout=timeout if service_tier == "flex" else None,
+        )
+    elif model_name.startswith("gemini"):
+        # Gemini 2.5+ models support a configurable thinking_budget.
+        # Map reasoning_effort to thinking tokens (mirrors the Claude branch),
+        # and disable thinking for agents that rely on structured output.
+        if agent_name in STRUCTURED_OUTPUT_AGENTS:
+            thinking_budget = 0
+        elif reasoning_effort == "low":
+            thinking_budget = 1024
+        elif reasoning_effort == "medium":
+            thinking_budget = 2048
+        elif reasoning_effort == "high":
+            thinking_budget = 4096
+        else:
+            thinking_budget = 0
+        model = ChatGoogleGenerativeAI(
+            model=model_name,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            thinking_budget=thinking_budget,
+            include_thoughts=False,
         )
     else:
         raise ValueError(f"Model {model_name} not supported")

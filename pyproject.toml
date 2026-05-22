@@ -24,6 +24,7 @@ dependencies = [
     "openai~=1.82.1",
     "langchain_openai~=0.3.18",
     "langchain_anthropic~=0.3.14",
+    "langchain-google-genai~=2.1",
     "langgraph~=0.5.3",
     "biopython~=1.84",
     "xmltodict>=0.14.2",

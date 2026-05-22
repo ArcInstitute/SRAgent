@@ -237,3 +237,73 @@ class TestSetModel:
                 thinking={"type": "disabled"},
                 max_tokens=1024,
             )
+
+    @patch("SRAgent.agents.utils.load_settings")
+    def test_set_model_with_gemini(self, mock_load_settings):
+        """Test set_model with gemini model"""
+        # Mock settings
+        mock_settings = {
+            "models": {"default": "gemini-3-flash"},
+            "temperature": {"default": 0.1},
+            "reasoning_effort": {"default": "low"},
+        }
+        mock_load_settings.return_value = mock_settings
+
+        # low reasoning effort -> 1024 thinking_budget
+        with patch("SRAgent.agents.utils.ChatGoogleGenerativeAI") as mock_chat:
+            model = set_model()
+            mock_chat.assert_called_once_with(
+                model="gemini-3-flash",
+                temperature=0.1,
+                max_tokens=None,
+                thinking_budget=1024,
+                include_thoughts=False,
+            )
+
+        # medium reasoning effort -> 2048 thinking_budget
+        mock_settings["reasoning_effort"]["default"] = "medium"
+        with patch("SRAgent.agents.utils.ChatGoogleGenerativeAI") as mock_chat:
+            model = set_model()
+            mock_chat.assert_called_once_with(
+                model="gemini-3-flash",
+                temperature=0.1,
+                max_tokens=None,
+                thinking_budget=2048,
+                include_thoughts=False,
+            )
+
+        # high reasoning effort -> 4096 thinking_budget
+        mock_settings["reasoning_effort"]["default"] = "high"
+        with patch("SRAgent.agents.utils.ChatGoogleGenerativeAI") as mock_chat:
+            model = set_model()
+            mock_chat.assert_called_once_with(
+                model="gemini-3-flash",
+                temperature=0.1,
+                max_tokens=None,
+                thinking_budget=4096,
+                include_thoughts=False,
+            )
+
+        # unrecognized reasoning effort -> thinking disabled
+        mock_settings["reasoning_effort"]["default"] = "none"
+        with patch("SRAgent.agents.utils.ChatGoogleGenerativeAI") as mock_chat:
+            model = set_model()
+            mock_chat.assert_called_once_with(
+                model="gemini-3-flash",
+                temperature=0.1,
+                max_tokens=None,
+                thinking_budget=0,
+                include_thoughts=False,
+            )
+
+        # structured-output agents must have thinking disabled
+        mock_settings["reasoning_effort"]["default"] = "high"
+        with patch("SRAgent.agents.utils.ChatGoogleGenerativeAI") as mock_chat:
+            model = set_model(agent_name="metadata")
+            mock_chat.assert_called_once_with(
+                model="gemini-3-flash",
+                temperature=0.1,
+                max_tokens=None,
+                thinking_budget=0,
+                include_thoughts=False,
+            )

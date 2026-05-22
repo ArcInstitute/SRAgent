@@ -31,10 +31,14 @@ def arg_parse(args=None) -> dict:
     and other Entriz databases. It is designed to be a flexible and easy-to-use tool for
     interacting with the SRA and Entrez.
     """
-    # check for OP
-    if os.getenv("OPENAI_API_KEY") is None and os.getenv("ANTHROPIC_API_KEY") is None:
+    # check for at least one supported LLM provider API key
+    if (
+        os.getenv("OPENAI_API_KEY") is None
+        and os.getenv("ANTHROPIC_API_KEY") is None
+        and os.getenv("GOOGLE_API_KEY") is None
+    ):
         raise ValueError(
-            "You must set either the OPENAI_API_KEY or ANTHROPIC_API_KEY environment variable"
+            "You must set the OPENAI_API_KEY, ANTHROPIC_API_KEY, or GOOGLE_API_KEY environment variable"
         )
 
     # main parser

@@ -63,11 +63,13 @@ pip install -e ".[dev]"
   * See [Configuring models](#configuring-models) information on setting models
 * `ANTHROPIC_API_KEY` = API key for using the Anthropic API
   * **required** when using Claude models
+* `GOOGLE_API_KEY` = API key for using the Google Gemini API
+  * **required** when using Gemini models
 * `EMAIL` = email for using the Entrez API
   * optional, but **HIGHLY** recommended
 * `NCBI_API_KEY` = API key for using the Entrez API
   * optional, increases rate limits
-* `DYNACONF` = switch between "test", "prod", and "claude" environments
+* `DYNACONF` = switch between "test", "prod", "claude", and "gemini" environments
   * optional, default is "prod"
   * this affects the SQL database used and models selected
   * no database is used by default
@@ -236,7 +238,7 @@ Multiple SRA datasets:
 SRAgent srx-info 36106630 32664033 27694586
 ```
 
-Use the SQL database to filter out already-processed datasets:
+Use the SQL database to filter out already-processed datasets and add the results to the database:
 
 ```bash
 SRAgent srx-info --use-database 18060880 27454880 27454942 27694586
@@ -525,6 +527,40 @@ You can also customize the specific Claude model in settings.yml:
 claude:
   models:
     default: "claude-sonnet-4-5"  # Or any other Claude model version
+  temperature:
+    default: 0.1
+  reasoning_effort:
+    default: "medium"  # Set your preferred reasoning effort; use "" to disable
+```
+
+## Using Gemini models
+
+SRAgent supports using Google's Gemini models:
+
+* Set the `GOOGLE_API_KEY` environment variable to your Google AI Studio API key
+* Switch to the Gemini environment using `export DYNACONF=gemini`
+  * Update the [settings.yml](./SRAgent/settings.yml) file, as needed
+  * See [Configuring models](#configuring-models) information on setting model parameters
+* Run SRAgent commands as usual
+
+Gemini 2.5+ models support a configurable thinking budget, which `reasoning_effort` is mapped to:
+* `low`: 1024 thinking tokens (best for simple tasks)
+* `medium`: 2048 thinking tokens (good balance)
+* `high`: 4096 thinking tokens (best for complex reasoning)
+* Anything else: Disables the thinking budget
+
+Example:
+```bash
+export GOOGLE_API_KEY=your_api_key
+export DYNACONF="gemini"
+SRAgent entrez "Convert GSE121737 to SRX accessions"
+```
+
+You can also customize the specific Gemini model in settings.yml:
+```yaml
+gemini:
+  models:
+    default: "gemini-3-flash"  # Or any other Gemini model version
   temperature:
     default: 0.1
   reasoning_effort:

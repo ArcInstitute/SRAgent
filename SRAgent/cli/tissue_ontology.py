@@ -35,7 +35,7 @@ def tissue_ontology_parser(subparsers):
         help="Maximum number of concurrent processes",
     )
     sub_parser.add_argument(
-        "--recursion-limit", type=int, default=40, help="Maximum recursion limit"
+        "--recursion-limit", type=int, default=50, help="Maximum recursion limit"
     )
     sub_parser.add_argument(
         "--tenant",

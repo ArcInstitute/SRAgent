@@ -1,6 +1,8 @@
 SRAgent
 =======
 
+[![DOI](https://zenodo.org/badge/890528820.svg)](https://doi.org/10.5281/zenodo.21539103)
+
 Agentic workflows for obtaining data from the Sequence Read Archive.
 
 # Manuscript
